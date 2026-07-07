@@ -2,30 +2,30 @@
 
 :root {
   /* Light Theme Colors */
-  --bg-primary: #f1f5f9;
+  --bg-primary: #f8fafc;
   --bg-secondary: #ffffff;
-  --bg-card: rgba(255, 255, 255, 0.7);
-  --border-color: rgba(226, 232, 240, 0.8);
+  --bg-card: #ffffff;
+  --border-color: #cbd5e1; /* Much darker Slate border */
   --text-primary: #0f172a;
   --text-secondary: #475569;
-  --accent-color: #6366f1;
-  --accent-hover: #4f46e5;
-  --accent-glow: rgba(99, 102, 241, 0.1);
-  --accent-light: rgba(99, 102, 241, 0.05);
-  --success-color: #10b981;
-  --success-hover: #059669;
-  --success-glow: rgba(16, 185, 129, 0.1);
-  --danger-color: #ef4444;
-  --danger-hover: #dc2626;
-  --danger-glow: rgba(239, 68, 68, 0.1);
-  --gold-color: #eab308;
+  --accent-color: #4f46e5; /* Darker, high contrast Indigo */
+  --accent-hover: #4338ca;
+  --accent-glow: rgba(79, 70, 229, 0.15);
+  --accent-light: rgba(79, 70, 229, 0.05);
+  --success-color: #059669;
+  --success-hover: #047857;
+  --success-glow: rgba(5, 150, 105, 0.15);
+  --danger-color: #dc2626;
+  --danger-hover: #b91c1c;
+  --danger-glow: rgba(220, 38, 38, 0.15);
+  --gold-color: #ca8a04;
   
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-bg: #ffffff;
+  --glass-border: #cbd5e1;
   --glass-blur: blur(12px);
 
   --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -37,6 +37,8 @@
   
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
+
+  --line-opacity: 0.95; /* Solid lines in light mode */
 }
 
 .dark {
@@ -53,7 +55,7 @@
   --accent-light: rgba(129, 140, 248, 0.05);
   --success-color: #34d399;
   --success-hover: #10b981;
-  --success-glow: rgba(52, 211, 153, 0.2);
+  --success-glow: rgba(5, 185, 129, 0.2);
   --danger-color: #f87171;
   --danger-hover: #ef4444;
   --danger-glow: rgba(248, 113, 113, 0.2);
@@ -64,6 +66,8 @@
   
   --glass-bg: rgba(17, 23, 38, 0.7);
   --glass-border: rgba(255, 255, 255, 0.06);
+
+  --line-opacity: 0.65; /* Faded glowing lines in dark mode */
 }
 
 * {

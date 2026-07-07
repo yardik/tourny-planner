@@ -1914,7 +1914,7 @@ export default function TournamentBrackets({ players, games }) {
                           fill="none" 
                           stroke="var(--accent-color)" 
                           strokeWidth="2" 
-                          opacity="0.6" 
+                          opacity="var(--line-opacity)" 
                         />
                       ))}
                     </svg>
