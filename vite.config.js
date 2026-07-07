@@ -14,7 +14,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons.svg', 'icon-192.png', 'icon-512.png'],
+      includeAssets: ['favicon.svg', 'icons.svg', 'icon-192.png', 'icon-512.png', 'logo-banner.png'],
       manifest: {
         name: 'Homestead Horseshoes',
         short_name: 'Homestead Horseshoes',

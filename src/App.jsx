@@ -150,8 +150,11 @@ function App() {
       {/* App Header */}
       <header className="app-header">
         <div className="header-logo">
-          <Trophy size={28} />
-          <h1>Homestead Horseshoes</h1>
+          <img 
+            src="/logo-banner.png" 
+            alt="Homestead Horseshoes" 
+            style={{ height: "42px", display: "block", objectFit: "contain" }} 
+          />
         </div>
 
         {/* Header Sync Status Pill & Toggle Switch */}
