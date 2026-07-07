@@ -16,8 +16,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons.svg', 'icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'Tourny Tourny Tourny',
-        short_name: 'Tourny Tourny Tourny',
+        name: 'Homestead Horseshoes',
+        short_name: 'Homestead Horseshoes',
         description: 'A local and cloud-synced tournament planner.',
         theme_color: '#0f172a',
         background_color: '#0f172a',
