@@ -135,13 +135,13 @@ body {
 
 .header-logo .logo-light {
   display: block;
-  height: 60px;
+  height: 80px;
   object-fit: contain;
 }
 
 .header-logo .logo-dark {
   display: none;
-  height: 60px;
+  height: 80px;
   object-fit: contain;
 }
 
