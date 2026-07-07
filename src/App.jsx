@@ -171,7 +171,7 @@ function App() {
         </div>
 
         {/* Header Sync Status Pill & Toggle Switch */}
-        <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+        <div className="header-controls">
           {/* Light/Dark Theme Toggle (Always Visible) */}
           <div style={{ 
             display: "flex", 
