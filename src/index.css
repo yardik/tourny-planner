@@ -153,6 +153,22 @@ body {
     justify-content: center;
     gap: 12px;
   }
+
+  .nav-tabs {
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .nav-tab-btn {
+    padding: 8px 10px;
+    font-size: 13px;
+    gap: 4px;
+  }
+
+  .nav-tab-btn svg {
+    width: 14px;
+    height: 14px;
+  }
 }
 
 .header-logo {
@@ -184,6 +200,7 @@ body {
 /* Navigation tabs */
 .nav-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   background: var(--bg-secondary);
   padding: 6px;
