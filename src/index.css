@@ -615,6 +615,15 @@ body {
   border-color: var(--accent-color) !important;
 }
 
+.gender-symbol {
+  font-size: 26px;
+  font-weight: 900;
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 4px;
+  line-height: 1;
+}
+
 /* Responsive display toggle classes */
 .desktop-only {
   display: block;
@@ -672,8 +681,7 @@ body {
   }
 
   .mobile-player-card .gender-symbol {
-    font-size: 18px;
-    font-weight: 900;
+    margin-left: 2px;
   }
 
   .mobile-player-card .card-actions {

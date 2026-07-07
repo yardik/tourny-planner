@@ -344,15 +344,8 @@ export default function PlayerManager({ players, games, isAnonymous }) {
                         <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                           <span>{player.name}</span>
                           <span 
-                            style={{ 
-                              fontSize: "20px", 
-                              color: player.gender === "Female" ? "#ec4899" : "#1d4ed8", 
-                              fontWeight: "900",
-                              opacity: 1,
-                              marginLeft: "2px",
-                              display: "inline-block",
-                              verticalAlign: "middle"
-                            }}
+                            className="gender-symbol"
+                            style={{ color: player.gender === "Female" ? "#ec4899" : "#1d4ed8" }}
                             title={player.gender || "Male"}
                           >
                             {player.gender === "Female" ? "♀" : "♂"}
