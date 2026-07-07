@@ -243,8 +243,8 @@ export default function TournamentHistory({ players }) {
           style={{ 
             width: "100%", 
             padding: "8px 10px", 
-            background: "var(--bg-primary)", 
-            border: isScored ? "1px solid rgba(99, 102, 241, 0.2)" : "1px solid var(--border-color)",
+            background: "var(--bg-secondary)", 
+            border: isScored ? "1px solid rgba(99, 102, 241, 0.25)" : "1px solid var(--border-color)",
             boxShadow: "var(--shadow-sm)"
           }}
         >
@@ -263,7 +263,7 @@ export default function TournamentHistory({ players }) {
                 border: t1Wins ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--border-color)",
                 padding: "4px 8px",
                 borderRadius: "var(--radius-sm)",
-                background: t1Wins ? "rgba(16, 185, 129, 0.03)" : "none"
+                background: t1Wins ? "rgba(16, 185, 129, 0.08)" : "var(--bg-primary)"
               }}
             >
               {team1 ? (
@@ -316,7 +316,7 @@ export default function TournamentHistory({ players }) {
                 border: t2Wins ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--border-color)",
                 padding: "4px 8px",
                 borderRadius: "var(--radius-sm)",
-                background: t2Wins ? "rgba(16, 185, 129, 0.03)" : "none"
+                background: t2Wins ? "rgba(16, 185, 129, 0.08)" : "var(--bg-primary)"
               }}
             >
               {team2 ? (

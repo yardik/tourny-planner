@@ -952,8 +952,8 @@ export default function TournamentBrackets({ players, games }) {
           style={{ 
             width: "100%", 
             padding: "8px 10px", 
-            background: "var(--bg-primary)", 
-            border: isScored ? "1px solid rgba(99, 102, 241, 0.2)" : "1px solid var(--border-color)",
+            background: "var(--bg-secondary)", 
+            border: isScored ? "1px solid rgba(99, 102, 241, 0.25)" : "1px solid var(--border-color)",
             boxShadow: "var(--shadow-sm)"
           }}
         >
@@ -972,7 +972,7 @@ export default function TournamentBrackets({ players, games }) {
                 border: t1Wins ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--border-color)",
                 padding: "4px 8px",
                 borderRadius: "var(--radius-sm)",
-                background: t1Wins ? "rgba(16, 185, 129, 0.03)" : "none"
+                background: t1Wins ? "rgba(16, 185, 129, 0.08)" : "var(--bg-primary)"
               }}
             >
               {team1 ? (
@@ -1025,7 +1025,7 @@ export default function TournamentBrackets({ players, games }) {
                 border: t2Wins ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--border-color)",
                 padding: "4px 8px",
                 borderRadius: "var(--radius-sm)",
-                background: t2Wins ? "rgba(16, 185, 129, 0.03)" : "none"
+                background: t2Wins ? "rgba(16, 185, 129, 0.08)" : "var(--bg-primary)"
               }}
             >
               {team2 ? (
@@ -1241,7 +1241,7 @@ export default function TournamentBrackets({ players, games }) {
                               border: t1Wins ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--border-color)",
                               padding: "10px 14px",
                               borderRadius: "var(--radius-sm)",
-                              background: t1Wins ? "rgba(16, 185, 129, 0.04)" : "rgba(255, 255, 255, 0.01)"
+                              background: t1Wins ? "rgba(16, 185, 129, 0.08)" : "var(--bg-primary)"
                             }}
                           >
                             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -1285,7 +1285,7 @@ export default function TournamentBrackets({ players, games }) {
                               border: t2Wins ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--border-color)",
                               padding: "10px 14px",
                               borderRadius: "var(--radius-sm)",
-                              background: t2Wins ? "rgba(16, 185, 129, 0.04)" : "rgba(255, 255, 255, 0.01)"
+                              background: t2Wins ? "rgba(16, 185, 129, 0.08)" : "var(--bg-primary)"
                             }}
                           >
                             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -1668,7 +1668,7 @@ export default function TournamentBrackets({ players, games }) {
                                         border: t1Wins ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--border-color)",
                                         padding: "10px 14px",
                                         borderRadius: "var(--radius-sm)",
-                                        background: t1Wins ? "rgba(16, 185, 129, 0.04)" : "rgba(255, 255, 255, 0.01)"
+                                        background: t1Wins ? "rgba(16, 185, 129, 0.08)" : "var(--bg-primary)"
                                       }}
                                     >
                                       <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -1712,7 +1712,7 @@ export default function TournamentBrackets({ players, games }) {
                                         border: t2Wins ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--border-color)",
                                         padding: "10px 14px",
                                         borderRadius: "var(--radius-sm)",
-                                        background: t2Wins ? "rgba(16, 185, 129, 0.04)" : "rgba(255, 255, 255, 0.01)"
+                                        background: t2Wins ? "rgba(16, 185, 129, 0.08)" : "var(--bg-primary)"
                                       }}
                                     >
                                       <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>

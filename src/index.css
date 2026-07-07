@@ -1,31 +1,31 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
 :root {
-  /* Light Theme Colors */
-  --bg-primary: #f8fafc;
-  --bg-secondary: #ffffff;
-  --bg-card: #ffffff;
-  --border-color: #cbd5e1; /* Much darker Slate border */
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --accent-color: #4f46e5; /* Darker, high contrast Indigo */
+  /* Light Theme Colors (Darker Slate Theme for High Contrast) */
+  --bg-primary: #cbd5e1;       /* Slate-300 */
+  --bg-secondary: #e2e8f0;     /* Slate-200 */
+  --bg-card: #f1f5f9;          /* Slate-100 */
+  --border-color: #94a3b8;     /* Slate-400 */
+  --text-primary: #0f172a;     /* Slate-900 */
+  --text-secondary: #334155;   /* Slate-700 */
+  --accent-color: #4f46e5;     /* Indigo-600 */
   --accent-hover: #4338ca;
-  --accent-glow: rgba(79, 70, 229, 0.15);
-  --accent-light: rgba(79, 70, 229, 0.05);
+  --accent-glow: rgba(79, 70, 229, 0.18);
+  --accent-light: rgba(79, 70, 229, 0.08);
   --success-color: #059669;
   --success-hover: #047857;
-  --success-glow: rgba(5, 150, 105, 0.15);
+  --success-glow: rgba(5, 150, 105, 0.18);
   --danger-color: #dc2626;
   --danger-hover: #b91c1c;
-  --danger-glow: rgba(220, 38, 38, 0.15);
+  --danger-glow: rgba(220, 38, 38, 0.18);
   --gold-color: #ca8a04;
   
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.12), 0 2px 4px -1px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.15), 0 4px 6px -2px rgba(0, 0, 0, 0.08);
   
-  --glass-bg: #ffffff;
-  --glass-border: #cbd5e1;
+  --glass-bg: #e2e8f0;         /* Slate-200 */
+  --glass-border: #94a3b8;     /* Slate-400 */
   --glass-blur: blur(12px);
 
   --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
