@@ -322,92 +322,160 @@ export default function PlayerManager({ players, games, isAnonymous }) {
             <p style={{ fontSize: "13px" }}>Use the form on the left to register players and assign ranks.</p>
           </div>
         ) : (
-          <div className="table-container">
-            <table className="app-table">
-              <thead>
-                <tr>
-                  <th>Player Name</th>
-                  <th style={{ textAlign: "center" }}>Rank</th>
-                  <th style={{ textAlign: "center" }}>W / L</th>
-                  <th style={{ textAlign: "center" }}>Win %</th>
-                  <th style={{ textAlign: "center" }}>Pts For</th>
-                  <th style={{ textAlign: "center" }}>Pts Against</th>
-                  {!isAnonymous && <th style={{ width: "80px", textAlign: "right" }}>Actions</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {sortedPlayers.map((player) => (
-                  <tr key={player.id}>
-                    <td style={{ fontWeight: "600" }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                        <span>{player.name}</span>
-                        <span 
-                          style={{ 
-                            fontSize: "20px", 
-                            color: player.gender === "Female" ? "#ec4899" : "#1d4ed8", 
-                            fontWeight: "900",
-                            opacity: 1,
-                            marginLeft: "2px",
-                            display: "inline-block",
-                            verticalAlign: "middle"
-                          }}
-                          title={player.gender || "Male"}
-                        >
-                          {player.gender === "Female" ? "♀" : "♂"}
+          <>
+            {/* Desktop Table View */}
+            <div className="table-container desktop-only">
+              <table className="app-table">
+                <thead>
+                  <tr>
+                    <th>Player Name</th>
+                    <th style={{ textAlign: "center" }}>Rank</th>
+                    <th style={{ textAlign: "center" }}>W / L</th>
+                    <th style={{ textAlign: "center" }}>Win %</th>
+                    <th style={{ textAlign: "center" }}>Pts For</th>
+                    <th style={{ textAlign: "center" }}>Pts Against</th>
+                    {!isAnonymous && <th style={{ width: "80px", textAlign: "right" }}>Actions</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedPlayers.map((player) => (
+                    <tr key={player.id}>
+                      <td style={{ fontWeight: "600" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                          <span>{player.name}</span>
+                          <span 
+                            style={{ 
+                              fontSize: "20px", 
+                              color: player.gender === "Female" ? "#ec4899" : "#1d4ed8", 
+                              fontWeight: "900",
+                              opacity: 1,
+                              marginLeft: "2px",
+                              display: "inline-block",
+                              verticalAlign: "middle"
+                            }}
+                            title={player.gender || "Male"}
+                          >
+                            {player.gender === "Female" ? "♀" : "♂"}
+                          </span>
+                          {duplicateNames.includes(player.name.toLowerCase().trim()) && (
+                            <AlertCircle 
+                              size={14} 
+                              style={{ color: "var(--gold-color)", flexShrink: 0 }} 
+                              title="Duplicate name detected in database"
+                            />
+                          )}
                         </span>
-                        {duplicateNames.includes(player.name.toLowerCase().trim()) && (
-                          <AlertCircle 
-                            size={14} 
-                            style={{ color: "var(--gold-color)", flexShrink: 0 }} 
-                            title="Duplicate name detected in database"
-                          />
-                        )}
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        <span className={`rank-badge rank-${player.rank.toLowerCase()}`}>
+                          {player.rank}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        <span style={{ color: "var(--success-color)", fontWeight: "600" }}>{player.stats.wins}</span>
+                        {" - "}
+                        <span style={{ color: "var(--danger-color)", fontWeight: "600" }}>{player.stats.losses}</span>
+                      </td>
+                      <td style={{ textAlign: "center", fontWeight: "600" }}>
+                        {player.stats.ratio}%
+                      </td>
+                      <td style={{ textAlign: "center", color: "var(--text-secondary)" }}>
+                        {player.stats.pointsScored}
+                      </td>
+                      <td style={{ textAlign: "center", color: "var(--text-secondary)" }}>
+                        {player.stats.pointsAgainst}
+                      </td>
+                      {!isAnonymous && (
+                        <td style={{ textAlign: "right" }}>
+                          <div style={{ display: "flex", justifyContent: "flex-end", gap: "4px" }}>
+                            <button
+                              className="btn-icon-only"
+                              title="Edit Player"
+                              onClick={() => startEdit(player)}
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                            <button
+                              className="btn-icon-only danger"
+                              title="Delete Player"
+                              onClick={() => handleDeletePlayer(player.id, player.name)}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card List View */}
+            <div className="mobile-only player-card-list">
+              {sortedPlayers.map((player) => (
+                <div key={player.id} className="mobile-player-card">
+                  <div className="card-header-row">
+                    <span className="player-name-wrapper">
+                      <span className="player-name">{player.name}</span>
+                      <span 
+                        className="gender-symbol" 
+                        style={{ color: player.gender === "Female" ? "#ec4899" : "#1d4ed8" }}
+                        title={player.gender || "Male"}
+                      >
+                        {player.gender === "Female" ? "♀" : "♂"}
                       </span>
-                    </td>
-                    <td style={{ textAlign: "center" }}>
+                      {duplicateNames.includes(player.name.toLowerCase().trim()) && (
+                        <AlertCircle 
+                          size={14} 
+                          style={{ color: "var(--gold-color)", flexShrink: 0 }} 
+                          title="Duplicate name detected in database"
+                        />
+                      )}
                       <span className={`rank-badge rank-${player.rank.toLowerCase()}`}>
                         {player.rank}
                       </span>
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      <span style={{ color: "var(--success-color)", fontWeight: "600" }}>{player.stats.wins}</span>
-                      {" - "}
-                      <span style={{ color: "var(--danger-color)", fontWeight: "600" }}>{player.stats.losses}</span>
-                    </td>
-                    <td style={{ textAlign: "center", fontWeight: "600" }}>
-                      {player.stats.ratio}%
-                    </td>
-                    <td style={{ textAlign: "center", color: "var(--text-secondary)" }}>
-                      {player.stats.pointsScored}
-                    </td>
-                    <td style={{ textAlign: "center", color: "var(--text-secondary)" }}>
-                      {player.stats.pointsAgainst}
-                    </td>
+                    </span>
                     {!isAnonymous && (
-                      <td style={{ textAlign: "right" }}>
-                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "4px" }}>
-                          <button
-                            className="btn-icon-only"
-                            title="Edit Player"
-                            onClick={() => startEdit(player)}
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                          <button
-                            className="btn-icon-only danger"
-                            title="Delete Player"
-                            onClick={() => handleDeletePlayer(player.id, player.name)}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
+                      <div className="card-actions">
+                        <button
+                          className="btn-icon-only"
+                          title="Edit Player"
+                          onClick={() => startEdit(player)}
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          className="btn-icon-only danger"
+                          title="Delete Player"
+                          onClick={() => handleDeletePlayer(player.id, player.name)}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  </div>
+                  
+                  <div className="card-stats-row">
+                    <div className="stat-item">
+                      <span className="stat-label">W/L:</span>
+                      <span className="stat-value text-success">{player.stats.wins}</span>
+                      <span>-</span>
+                      <span className="stat-value text-danger">{player.stats.losses}</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Win %:</span>
+                      <span className="stat-value">{player.stats.ratio}%</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Pts:</span>
+                      <span className="stat-value">{player.stats.pointsScored}:{player.stats.pointsAgainst}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -614,3 +614,103 @@ body {
   color: #ffffff !important;
   border-color: var(--accent-color) !important;
 }
+
+/* Responsive display toggle classes */
+.desktop-only {
+  display: block;
+}
+
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .desktop-only {
+    display: none !important;
+  }
+
+  .mobile-only {
+    display: block !important;
+  }
+
+  .player-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .mobile-player-card {
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    gap: 12px;
+  }
+
+  .mobile-player-card .card-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+
+  .mobile-player-card .player-name-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .mobile-player-card .player-name {
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--text-primary);
+  }
+
+  .mobile-player-card .gender-symbol {
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  .mobile-player-card .card-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .mobile-player-card .card-stats-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--border-color);
+    padding-top: 10px;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .mobile-player-card .stat-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .mobile-player-card .stat-label {
+    font-weight: 500;
+  }
+
+  .mobile-player-card .stat-value {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .mobile-player-card .stat-value.text-success {
+    color: var(--success-color);
+  }
+
+  .mobile-player-card .stat-value.text-danger {
+    color: var(--danger-color);
+  }
+}
