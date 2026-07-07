@@ -156,6 +156,10 @@ class DatabaseService {
     return !this.user || this.user.isAnonymous;
   }
 
+  get isSyncing() {
+    return this.isFirebaseReady && this.firestore && this.getSyncPreference() === "online";
+  }
+
   // --- Theme helper ---
   getTheme() {
     return localStorage.getItem("horseshoe_theme") || "light";
@@ -253,7 +257,7 @@ class DatabaseService {
     }
 
     // 2. Set up new subscriptions based on connection state
-    if (this.isFirebaseReady && this.firestore) {
+    if (this.isSyncing) {
       const qPlayers = query(collection(this.firestore, "players"), orderBy("createdAt", "desc"));
       this.firestorePlayersUnsub = onSnapshot(qPlayers, 
         (snapshot) => {
@@ -434,6 +438,9 @@ class DatabaseService {
   }
 
   getSyncPreference() {
+    if (this.isAnonymousUser()) {
+      return "online";
+    }
     return localStorage.getItem("horseshoe_sync_preference") || "online";
   }
 
@@ -463,58 +470,38 @@ class DatabaseService {
         this.firestoreMatchSetupUnsub = null;
       }
 
-      // Tear down Firebase connection completely
-      const apps = getApps();
-      if (apps.length > 0) {
-        await deleteApp(apps[0]);
-      }
-      this.firebaseApp = null;
-      this.firestore = null;
-      this.auth = null;
-      this.user = null;
-      this.isFirebaseReady = false;
       this.syncStatus = "offline-only";
       this.syncErrorMsg = "";
       this.notifyStatus();
-      this.notifyAuth();
+      // DO NOT delete Firebase app or set user = null to avoid logging the user out.
+      // Simply switch subscriptions back to offline local storage
       this.setupInternalSubscriptions();
     } else {
-      // Re-initialize Firebase if config is present
-      const config = this.getFirebaseConfig();
-      if (config) {
-        await this.initializeFirebase(config);
-      } else {
-        this.syncStatus = "offline-only";
+      // Re-initialize or re-subscribe using existing active Firebase connection
+      if (this.isFirebaseReady && this.firestore) {
+        this.syncStatus = "synced";
         this.notifyStatus();
         this.setupInternalSubscriptions();
+      } else {
+        const config = this.getFirebaseConfig();
+        if (config) {
+          await this.initializeFirebase(config);
+        } else {
+          this.syncStatus = "offline-only";
+          this.notifyStatus();
+          this.setupInternalSubscriptions();
+        }
       }
     }
   }
 
   // --- Firebase Initialization ---
   initFirebaseFromStorage() {
-    const preference = this.getSyncPreference();
-    if (preference === "offline") {
-      this.syncStatus = "offline-only";
-      return;
-    }
-
     const config = this.getFirebaseConfig();
     if (config) {
       try {
-        // We set flags, but actual initialization of Firebase is async or done in constructor.
-        // To prevent blocking, we attempt to initialize.
-        this.syncStatus = "syncing";
-        
-        // Simple synchronous check, we'll try to load it
-        const apps = getApps();
-        if (apps.length > 0) {
-          deleteApp(apps[0]).then(() => {
-            this.initializeFirebase(config);
-          });
-        } else {
-          this.initializeFirebase(config);
-        }
+        this.syncStatus = this.getSyncPreference() === "offline" ? "offline-only" : "syncing";
+        this.initializeFirebase(config);
       } catch (err) {
         console.error("Failed to parse saved Firebase config:", err);
         this.syncStatus = "error";
@@ -527,6 +514,14 @@ class DatabaseService {
   }
 
   async initializeFirebase(config, saveToLocalFile = false) {
+    // If already initialized with the same projectId, don't recreate it
+    if (this.isFirebaseReady && this.firebaseApp && this.firebaseApp.options.projectId === config.projectId) {
+      this.syncStatus = this.getSyncPreference() === "offline" ? "offline-only" : "synced";
+      this.notifyStatus();
+      this.setupInternalSubscriptions();
+      return true;
+    }
+
     if (!config || !config.projectId) {
       this.syncStatus = "offline-only";
       this.notifyStatus();
@@ -566,24 +561,38 @@ class DatabaseService {
       this.auth = getAuth(this.firebaseApp);
       
       // Listen to Auth State Changes
-      onAuthStateChanged(this.auth, (user) => {
+      onAuthStateChanged(this.auth, async (user) => {
+        const wasOffline = this.getSyncPreference() === "offline";
         this.user = user;
+        
+        // If signed out (anonymous), reset preference to online
+        if (user && user.isAnonymous) {
+          if (localStorage.getItem("horseshoe_sync_preference") === "offline") {
+            localStorage.setItem("horseshoe_sync_preference", "online");
+          }
+        }
+        
         this.notifyAuth();
+
+        if (!user) {
+          try {
+            await signInAnonymously(this.auth);
+          } catch (authErr) {
+            console.warn("Background anonymous sign-in failed or is disabled on Firebase Console:", authErr.message);
+          }
+        } else {
+          // If we transitioned to online due to logout/anonymous auth, restart subscriptions
+          if (wasOffline && this.getSyncPreference() === "online") {
+            this.syncStatus = "synced";
+            this.notifyStatus();
+            this.setupInternalSubscriptions();
+          }
+        }
       });
 
-      // Trigger anonymous login by default if not logged in to satisfy auth security rules
-      try {
-        if (!this.auth.currentUser) {
-          await signInAnonymously(this.auth);
-        }
-      } catch (authErr) {
-        console.warn("Background anonymous sign-in failed or is disabled on Firebase Console:", authErr.message);
-      }
-
       this.isFirebaseReady = true;
-      this.syncStatus = "synced";
+      this.syncStatus = this.getSyncPreference() === "offline" ? "offline-only" : "synced";
       this.syncErrorMsg = "";
-      localStorage.setItem(STORAGE_KEYS.FIREBASE_CONFIG, JSON.stringify(config));
       
       // Attempt to save to local config file if running locally and explicitly requested
       if (saveToLocalFile) {
@@ -622,7 +631,6 @@ class DatabaseService {
     this.isFirebaseReady = false;
     this.syncStatus = "offline-only";
     this.syncErrorMsg = "";
-    localStorage.removeItem(STORAGE_KEYS.FIREBASE_CONFIG);
     this.notifyStatus();
     this.notifyAuth();
     
@@ -695,17 +703,11 @@ class DatabaseService {
   async logoutUser() {
     if (this.auth) {
       await signOut(this.auth);
-      // Re-sign in anonymously to keep database accessible under auth rules
-      await signInAnonymously(this.auth);
     }
   }
 
   getFirebaseConfig() {
-    if (localFirebaseConfig) {
-      return localFirebaseConfig;
-    }
-    const saved = localStorage.getItem(STORAGE_KEYS.FIREBASE_CONFIG);
-    return saved ? JSON.parse(saved) : null;
+    return localFirebaseConfig;
   }
 
   // --- Data Migration (LocalStorage -> Firestore) ---
@@ -795,7 +797,7 @@ class DatabaseService {
     this.playersCache = players.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     this.notifyPlayers();
 
-    if (this.isFirebaseReady && this.firestore) {
+    if (this.isSyncing) {
       const playerDoc = doc(this.firestore, "players", player.id);
       await setDoc(playerDoc, newPlayer);
     }
@@ -812,7 +814,7 @@ class DatabaseService {
       this.notifyPlayers();
     }
 
-    if (this.isFirebaseReady && this.firestore) {
+    if (this.isSyncing) {
       const playerDoc = doc(this.firestore, "players", player.id);
       await updateDoc(playerDoc, player);
     }
@@ -834,7 +836,7 @@ class DatabaseService {
     this.notifyPlayers();
     this.notifyGames();
 
-    if (this.isFirebaseReady && this.firestore) {
+    if (this.isSyncing) {
       const playerDoc = doc(this.firestore, "players", playerId);
       await deleteDoc(playerDoc);
     }
@@ -864,7 +866,7 @@ class DatabaseService {
     this.gamesCache = games.sort((a, b) => new Date(b.date) - new Date(a.date));
     this.notifyGames();
 
-    if (this.isFirebaseReady && this.firestore) {
+    if (this.isSyncing) {
       const gameDoc = doc(this.firestore, "games", game.id);
       await setDoc(gameDoc, newGame);
     }
@@ -878,7 +880,7 @@ class DatabaseService {
     this.gamesCache = games.sort((a, b) => new Date(b.date) - new Date(a.date));
     this.notifyGames();
 
-    if (this.isFirebaseReady && this.firestore) {
+    if (this.isSyncing) {
       const gameDoc = doc(this.firestore, "games", gameId);
       await deleteDoc(gameDoc);
     }
@@ -912,7 +914,7 @@ class DatabaseService {
     this.historyCache = history.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
     this.notifyHistory();
 
-    if (this.isFirebaseReady && this.firestore) {
+    if (this.isSyncing) {
       const historyDoc = doc(this.firestore, "tournament_history", newEntry.id);
       const serializedEntry = { ...newEntry };
       if (serializedEntry.tournament) {
@@ -930,7 +932,7 @@ class DatabaseService {
     this.historyCache = history.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
     this.notifyHistory();
 
-    if (this.isFirebaseReady && this.firestore) {
+    if (this.isSyncing) {
       const docRef = doc(this.firestore, "tournament_history", id);
       await deleteDoc(docRef);
     }
@@ -961,7 +963,7 @@ class DatabaseService {
     this.activeTournamentCache = tournament;
     this.notifyActiveTournament();
 
-    if (this.isFirebaseReady && this.firestore) {
+    if (this.isSyncing) {
       const docRef = doc(this.firestore, "active_tournament", "current");
       if (tournament === null) {
         await deleteDoc(docRef);
@@ -1011,7 +1013,7 @@ class DatabaseService {
     this.matchSetupCache = matchSetup;
     this.notifyMatchSetup();
 
-    if (this.isFirebaseReady && this.firestore) {
+    if (this.isSyncing) {
       const docRef = doc(this.firestore, "match_setup", "current");
       await setDoc(docRef, matchSetup);
     }
