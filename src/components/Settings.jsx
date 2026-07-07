@@ -15,8 +15,7 @@ import {
   UserPlus
 } from "lucide-react";
 
-export default function Settings({ players, games, activeTab }) {
-  const [theme, setTheme] = useState(db.getTheme());
+export default function Settings({ players, games, activeTab, theme, onThemeChange }) {
   const [bracketMethod, setBracketMethod] = useState(db.getBracketMethod());
   const [syncInfo, setSyncInfo] = useState({ status: "offline-only", error: "" });
   
@@ -64,8 +63,7 @@ export default function Settings({ players, games, activeTab }) {
 
   // Theme Toggler
   const handleThemeChange = (newTheme) => {
-    setTheme(newTheme);
-    db.setTheme(newTheme);
+    onThemeChange(newTheme);
   };
 
   const handleBracketMethodChange = (newMethod) => {

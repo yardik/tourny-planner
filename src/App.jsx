@@ -18,7 +18,9 @@ import {
   Award,
   History,
   LogOut,
-  User
+  User,
+  Sun,
+  Moon
 } from "lucide-react";
 import "./App.css";
 
@@ -34,6 +36,12 @@ function App() {
   const [isSyncingTransition, setIsSyncingTransition] = useState(false);
   const [user, setUser] = useState(db.user);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [theme, setTheme] = useState(db.getTheme());
+
+  const handleThemeChange = (newTheme) => {
+    setTheme(newTheme);
+    db.setTheme(newTheme);
+  };
 
   const handleToggleSyncPreference = async () => {
     const targetPref = syncPreference === "online" ? "offline" : "online";
@@ -164,6 +172,48 @@ function App() {
 
         {/* Header Sync Status Pill & Toggle Switch */}
         <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {/* Light/Dark Theme Toggle (Always Visible) */}
+          <div style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            gap: "8px", 
+            background: "var(--bg-primary)", 
+            padding: "4px 10px", 
+            borderRadius: "20px", 
+            border: "1px solid var(--border-color)",
+            boxShadow: "var(--shadow-sm)"
+          }}>
+            <Sun size={14} style={{ color: theme === "light" ? "var(--accent-color)" : "var(--text-secondary)" }} />
+            <button
+              type="button"
+              onClick={() => handleThemeChange(theme === "dark" ? "light" : "dark")}
+              style={{
+                position: "relative",
+                width: "36px",
+                height: "20px",
+                borderRadius: "10px",
+                background: theme === "dark" ? "var(--accent-color)" : "var(--border-color)",
+                border: "none",
+                cursor: "pointer",
+                padding: "2px",
+                transition: "background 0.2s",
+                display: "flex",
+                alignItems: "center"
+              }}
+              aria-label="Toggle Light/Dark Theme"
+            >
+              <div style={{
+                width: "16px",
+                height: "16px",
+                borderRadius: "50%",
+                background: "#ffffff",
+                transform: theme === "dark" ? "translateX(16px)" : "translateX(0)",
+                transition: "transform 0.2s"
+              }} />
+            </button>
+            <Moon size={14} style={{ color: theme === "dark" ? "var(--accent-color)" : "var(--text-secondary)" }} />
+          </div>
+
           {user && !user.isAnonymous && (
             <>
               {/* Toggle Switch */}
@@ -427,7 +477,7 @@ function App() {
           <ScoreTracker players={players} games={games} history={history} />
         )}
         {activeTab === "settings" && user && !user.isAnonymous && (
-          <Settings players={players} games={games} activeTab={activeTab} />
+          <Settings players={players} games={games} activeTab={activeTab} theme={theme} onThemeChange={handleThemeChange} />
         )}
       </main>
 
