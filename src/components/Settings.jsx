@@ -21,12 +21,7 @@ export default function Settings({ players, games, activeTab }) {
   const [syncInfo, setSyncInfo] = useState({ status: "offline-only", error: "" });
   
   // Firebase configuration state
-  const [apiKey, setApiKey] = useState("");
-  const [authDomain, setAuthDomain] = useState("");
-  const [projectId, setProjectId] = useState("");
-  const [storageBucket, setStorageBucket] = useState("");
-  const [messagingSenderId, setMessagingSenderId] = useState("");
-  const [appId, setAppId] = useState("");
+  const [configText, setConfigText] = useState("");
   
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -44,12 +39,7 @@ export default function Settings({ players, games, activeTab }) {
   useEffect(() => {
     const config = db.getFirebaseConfig();
     if (config) {
-      setApiKey(config.apiKey || "");
-      setAuthDomain(config.authDomain || "");
-      setProjectId(config.projectId || "");
-      setStorageBucket(config.storageBucket || "");
-      setMessagingSenderId(config.messagingSenderId || "");
-      setAppId(config.appId || "");
+      setConfigText(JSON.stringify(config, null, 2));
     }
   }, []);
 
@@ -64,23 +54,45 @@ export default function Settings({ players, games, activeTab }) {
     db.setBracketMethod(newMethod);
   };
 
+  // Parsing helper to extract keys from pasted text (regex support for JS objects and standard JSON)
+  const parseFirebaseConfig = (text) => {
+    if (!text) return null;
+    
+    // Try standard JSON first
+    try {
+      const clean = text.trim();
+      if (clean.startsWith("{") && clean.endsWith("}")) {
+        return JSON.parse(clean);
+      }
+    } catch (e) {
+      // Continue to regex parser if JSON parsing fails
+    }
+
+    const keys = ["apiKey", "authDomain", "projectId", "storageBucket", "messagingSenderId", "appId"];
+    const result = {};
+
+    keys.forEach(key => {
+      // Regex matches: key name, colon or equals sign, and quoted values
+      const regex = new RegExp(`['"]?${key}['"]?\\s*[:=]\\s*['"]([^'"]+)['"]`, "i");
+      const match = text.match(regex);
+      if (match && match[1]) {
+        result[key] = match[1].trim();
+      }
+    });
+
+    return Object.keys(result).length > 0 ? result : null;
+  };
+
   // Save Firebase settings
   const handleSaveFirebase = async (e) => {
     e.preventDefault();
     setIsSaving(true);
     setSaveSuccess(false);
 
-    const config = {
-      apiKey: apiKey.trim(),
-      authDomain: authDomain.trim(),
-      projectId: projectId.trim(),
-      storageBucket: storageBucket.trim(),
-      messagingSenderId: messagingSenderId.trim(),
-      appId: appId.trim()
-    };
+    const config = parseFirebaseConfig(configText);
 
-    if (!config.projectId) {
-      alert("Project ID is required to enable Firebase.");
+    if (!config || !config.projectId || !config.apiKey) {
+      alert("Could not parse a valid Firebase Configuration. Make sure you paste the config object containing at least 'apiKey' and 'projectId'.");
       setIsSaving(false);
       return;
     }
@@ -97,12 +109,7 @@ export default function Settings({ players, games, activeTab }) {
   const handleDisconnectFirebase = async () => {
     if (window.confirm("Are you sure you want to stop syncing with Firebase? The app will return to offline-only LocalStorage mode.")) {
       await db.clearFirebaseConfig();
-      setApiKey("");
-      setAuthDomain("");
-      setProjectId("");
-      setStorageBucket("");
-      setMessagingSenderId("");
-      setAppId("");
+      setConfigText("");
     }
   };
 
@@ -438,76 +445,34 @@ export default function Settings({ players, games, activeTab }) {
         )}
 
         <form onSubmit={handleSaveFirebase}>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Firebase API Key</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={apiKey} 
-                onChange={(e) => setApiKey(e.target.value)} 
-                placeholder="AIzaSy..." 
-                required 
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Project ID</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={projectId} 
-                onChange={(e) => setProjectId(e.target.value)} 
-                placeholder="horseshoe-tournament-1234" 
-                required 
-              />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Auth Domain</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={authDomain} 
-                onChange={(e) => setAuthDomain(e.target.value)} 
-                placeholder="horseshoe-tournament-1234.firebaseapp.com" 
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Storage Bucket</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={storageBucket} 
-                onChange={(e) => setStorageBucket(e.target.value)} 
-                placeholder="horseshoe-tournament-1234.appspot.com" 
-              />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Messaging Sender ID</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={messagingSenderId} 
-                onChange={(e) => setMessagingSenderId(e.target.value)} 
-                placeholder="1029384756" 
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">App ID</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={appId} 
-                onChange={(e) => setAppId(e.target.value)} 
-                placeholder="1:1029384756:web:abcd1234efgh" 
-                required
-              />
-            </div>
+          <div className="form-group" style={{ marginBottom: "16px" }}>
+            <label className="form-label" style={{ fontWeight: "700" }}>Paste Firebase Config Object</label>
+            <textarea
+              className="form-input"
+              rows={10}
+              value={configText}
+              onChange={(e) => setConfigText(e.target.value)}
+              placeholder={`const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  authDomain: "horseshoe-tournament-1234.firebaseapp.com",
+  projectId: "horseshoe-tournament-1234",
+  storageBucket: "horseshoe-tournament-1234.appspot.com",
+  messagingSenderId: "1029384756",
+  appId: "1:1029384756:web:abcd1234efgh"
+};`}
+              style={{ 
+                fontFamily: "monospace", 
+                fontSize: "12px", 
+                lineHeight: "1.6", 
+                width: "100%", 
+                resize: "vertical",
+                padding: "12px",
+                background: "var(--bg-primary)",
+                border: "1px solid var(--border-color)",
+                borderRadius: "var(--radius-sm)"
+              }}
+              required
+            />
           </div>
 
           <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
