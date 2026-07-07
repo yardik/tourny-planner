@@ -1,49 +1,50 @@
 import { useState, useEffect } from "react";
 import { Users, UserPlus, UserMinus, Shuffle, RotateCcw, AlertCircle, ArrowLeft, Trophy } from "lucide-react";
+import db from "../services/db";
 
-export default function MatchSetup({ players, onBuildMatch }) {
+export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMatch }) {
   const [selectedPlayerIds, setSelectedPlayerIds] = useState(() => {
-    try {
-      const saved = localStorage.getItem("horseshoe_match_setup_selected");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
+    const s = db.getLocalMatchSetup();
+    return s ? s.selectedPlayerIds : [];
   });
   const [generatedTeams, setGeneratedTeams] = useState(() => {
-    try {
-      const saved = localStorage.getItem("horseshoe_match_setup_teams");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
+    const s = db.getLocalMatchSetup();
+    return s ? s.generatedTeams : [];
   });
   const [sittingOut, setSittingOut] = useState([]);
   const [fallbackMsg, setFallbackMsg] = useState("");
   const [isGenerated, setIsGenerated] = useState(() => {
-    try {
-      const saved = localStorage.getItem("horseshoe_match_setup_generated");
-      return saved ? saved === "true" : false;
-    } catch {
-      return false;
-    }
+    const s = db.getLocalMatchSetup();
+    return s ? s.isGenerated : false;
   });
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Persist selectedPlayerIds to localStorage
+  // Sync changes from the matchSetup prop down to local states
   useEffect(() => {
-    localStorage.setItem("horseshoe_match_setup_selected", JSON.stringify(selectedPlayerIds));
-  }, [selectedPlayerIds]);
+    if (matchSetup) {
+      setSelectedPlayerIds(matchSetup.selectedPlayerIds || []);
+      setGeneratedTeams(matchSetup.generatedTeams || []);
+      setIsGenerated(matchSetup.isGenerated || false);
+    }
+  }, [matchSetup]);
 
-  // Persist generatedTeams to localStorage
+  // Sync changes from local states back up to the database (only for authenticated users)
   useEffect(() => {
-    localStorage.setItem("horseshoe_match_setup_teams", JSON.stringify(generatedTeams));
-  }, [generatedTeams]);
+    if (isAnonymous) return; // Anonymous users are read-only
 
-  // Persist isGenerated to localStorage
-  useEffect(() => {
-    localStorage.setItem("horseshoe_match_setup_generated", isGenerated ? "true" : "false");
-  }, [isGenerated]);
+    const isDiff = 
+      JSON.stringify(matchSetup?.selectedPlayerIds) !== JSON.stringify(selectedPlayerIds) ||
+      JSON.stringify(matchSetup?.generatedTeams) !== JSON.stringify(generatedTeams) ||
+      matchSetup?.isGenerated !== isGenerated;
+      
+    if (isDiff) {
+      db.saveMatchSetup({
+        selectedPlayerIds,
+        generatedTeams,
+        isGenerated
+      });
+    }
+  }, [selectedPlayerIds, generatedTeams, isGenerated, isAnonymous]);
 
   // Clean up selection list and generated teams if players are deleted from the database
   useEffect(() => {
@@ -381,7 +382,7 @@ export default function MatchSetup({ players, onBuildMatch }) {
   };
 
   // Generate a 3-round tournament schedule and build starting brackets
-  const handleBuildMatch = () => {
+  const handleBuildMatch = async () => {
     // Filter out any teams that are completely empty (in case players were deleted)
     const validTeams = generatedTeams.filter(t => t.p1 || t.p2);
     const numTeams = validTeams.length;
@@ -451,7 +452,7 @@ export default function MatchSetup({ players, onBuildMatch }) {
     };
 
     try {
-      localStorage.setItem("horseshoe_active_tournament", JSON.stringify(tournament));
+      await db.saveActiveTournament(tournament);
       if (onBuildMatch) {
         onBuildMatch();
       }
@@ -503,7 +504,7 @@ export default function MatchSetup({ players, onBuildMatch }) {
           <div className="glass-panel">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
               <h3 style={{ fontSize: "18px", fontWeight: "600" }}>Available Players</h3>
-              {availablePlayers.length > 0 && (
+              {availablePlayers.length > 0 && !isAnonymous && (
                 <button type="button" className="btn btn-secondary" style={{ padding: "6px 12px", fontSize: "13px" }} onClick={handleAddAll}>
                   Add All
                 </button>
@@ -547,9 +548,9 @@ export default function MatchSetup({ players, onBuildMatch }) {
                       <span style={{ fontWeight: "600", marginRight: "8px" }}>{player.name}</span>
                       <span 
                         style={{ 
-                          fontSize: "12px", 
-                          color: player.gender === "Female" ? "#ec4899" : "#3b82f6", 
-                          fontWeight: "bold",
+                          fontSize: "20px", 
+                          color: player.gender === "Female" ? "#ec4899" : "#1d4ed8", 
+                          fontWeight: "900",
                           marginRight: "10px" 
                         }}
                       >
@@ -559,15 +560,17 @@ export default function MatchSetup({ players, onBuildMatch }) {
                         {player.rank}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      className="btn-icon-only"
-                      onClick={() => handleAddPlayer(player.id)}
-                      title="Add to Match"
-                      style={{ color: "var(--accent-color)" }}
-                    >
-                      <UserPlus size={18} />
-                    </button>
+                    {!isAnonymous && (
+                      <button
+                        type="button"
+                        className="btn-icon-only"
+                        onClick={() => handleAddPlayer(player.id)}
+                        title="Add to Match"
+                        style={{ color: "var(--accent-color)" }}
+                      >
+                        <UserPlus size={18} />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -580,7 +583,7 @@ export default function MatchSetup({ players, onBuildMatch }) {
               <h3 style={{ fontSize: "18px", fontWeight: "600" }}>
                 Active Players In-Match ({selectedPlayers.length})
               </h3>
-              {selectedPlayers.length > 0 && (
+              {selectedPlayers.length > 0 && !isAnonymous && (
                 <button type="button" className="btn btn-danger" style={{ padding: "6px 12px", fontSize: "13px" }} onClick={handleClearAll}>
                   Remove All
                 </button>
@@ -592,7 +595,7 @@ export default function MatchSetup({ players, onBuildMatch }) {
                 <Users size={32} style={{ opacity: 0.3, marginBottom: "8px" }} />
                 <p>No players added to the match yet.</p>
                 <p style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
-                  Click the + button next to players in the directory list to add them.
+                  {isAnonymous ? "Waiting for a coordinator to select players." : "Click the + button next to players in the directory list to add them."}
                 </p>
               </div>
             ) : (
@@ -615,9 +618,9 @@ export default function MatchSetup({ players, onBuildMatch }) {
                         <span style={{ fontWeight: "600", marginRight: "8px" }}>{player.name}</span>
                         <span 
                           style={{ 
-                            fontSize: "12px", 
-                            color: player.gender === "Female" ? "#ec4899" : "#3b82f6", 
-                            fontWeight: "bold",
+                            fontSize: "20px", 
+                            color: player.gender === "Female" ? "#ec4899" : "#1d4ed8", 
+                            fontWeight: "900",
                             marginRight: "10px" 
                           }}
                         >
@@ -627,14 +630,16 @@ export default function MatchSetup({ players, onBuildMatch }) {
                           {player.rank}
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        className="btn-icon-only danger"
-                        onClick={() => handleRemovePlayer(player.id)}
-                        title="Remove from Match"
-                      >
-                        <UserMinus size={18} />
-                      </button>
+                      {!isAnonymous && (
+                        <button
+                          type="button"
+                          className="btn-icon-only danger"
+                          onClick={() => handleRemovePlayer(player.id)}
+                          title="Remove from Match"
+                        >
+                          <UserMinus size={18} />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -667,18 +672,20 @@ export default function MatchSetup({ players, onBuildMatch }) {
                   {selectedPlayers.length < 2 && (
                     <div style={{ display: "flex", gap: "6px", alignItems: "center", color: "var(--text-secondary)", fontSize: "13px", marginBottom: "12px" }}>
                       <AlertCircle size={16} />
-                      <span>Select at least 2 players to generate teams.</span>
+                      <span>{isAnonymous ? "Waiting for a coordinator to select at least 2 players." : "Select at least 2 players to generate teams."}</span>
                     </div>
                   )}
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    style={{ width: "100%", gap: "10px" }}
-                    onClick={handleGenerateTeams}
-                    disabled={selectedPlayers.length < 2 || selectedPlayers.length % 2 !== 0}
-                  >
-                    <Shuffle size={18} /> Generate Teams
-                  </button>
+                  {!isAnonymous && (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ width: "100%", gap: "10px" }}
+                      onClick={handleGenerateTeams}
+                      disabled={selectedPlayers.length < 2 || selectedPlayers.length % 2 !== 0}
+                    >
+                      <Shuffle size={18} /> Generate Teams
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -687,44 +694,51 @@ export default function MatchSetup({ players, onBuildMatch }) {
       ) : (
         /* Team Generation View */
         <div className="glass-panel">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "12px" }}>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ display: "flex", alignItems: "center", gap: "8px" }}
-              onClick={() => setIsGenerated(false)}
-            >
-              <ArrowLeft size={16} /> Adjust Players
-            </button>
-
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                style={{ display: "flex", alignItems: "center", gap: "8px" }}
-                onClick={handleBuildMatch}
-                disabled={generatedTeams.filter(t => t.p1 || t.p2).length < 2}
-              >
-                <Trophy size={16} /> Build Match with These Teams
-              </button>
+          {isAnonymous ? (
+            <div style={{ marginBottom: "24px" }}>
+              <h3 style={{ fontSize: "20px", fontWeight: "700", marginBottom: "4px" }}>Generated Match Teams</h3>
+              <p style={{ color: "var(--text-secondary)", fontSize: "14px", margin: 0 }}>These teams have been generated for the upcoming match. The bracket will be built by a coordinator.</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "12px" }}>
               <button
                 type="button"
                 className="btn btn-secondary"
                 style={{ display: "flex", alignItems: "center", gap: "8px" }}
-                onClick={handleGenerateTeams}
+                onClick={() => setIsGenerated(false)}
               >
-                <Shuffle size={16} /> Re-generate Teams
+                <ArrowLeft size={16} /> Adjust Players
               </button>
-              <button
-                type="button"
-                className="btn btn-danger"
-                style={{ display: "flex", alignItems: "center", gap: "8px" }}
-                onClick={handleClearAll}
-              >
-                <RotateCcw size={16} /> Clear Setup
-              </button>
+
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ display: "flex", alignItems: "center", gap: "8px" }}
+                  onClick={handleBuildMatch}
+                  disabled={generatedTeams.filter(t => t.p1 || t.p2).length < 2}
+                >
+                  <Trophy size={16} /> Build Match with These Teams
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ display: "flex", alignItems: "center", gap: "8px" }}
+                  onClick={handleGenerateTeams}
+                >
+                  <Shuffle size={16} /> Re-generate Teams
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  style={{ display: "flex", alignItems: "center", gap: "8px" }}
+                  onClick={handleClearAll}
+                >
+                  <RotateCcw size={16} /> Clear Setup
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {currentWarnings.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "20px" }}>
@@ -838,17 +852,27 @@ export default function MatchSetup({ players, onBuildMatch }) {
                         {team.p1 ? (
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                              <button 
-                                type="button" 
-                                className="btn-icon-only danger" 
-                                style={{ padding: "4px" }}
-                                onClick={() => handleRemovePlayerFromTeam(idx, "p1")}
-                                title="Remove player"
-                              >
-                                <UserMinus size={14} />
-                              </button>
+                              {!isAnonymous && (
+                                <button 
+                                  type="button" 
+                                  className="btn-icon-only danger" 
+                                  style={{ padding: "4px" }}
+                                  onClick={() => handleRemovePlayerFromTeam(idx, "p1")}
+                                  title="Remove player"
+                                >
+                                  <UserMinus size={14} />
+                                </button>
+                              )}
                               <span style={{ fontWeight: "600" }}>{team.p1.name}</span>
-                              <span style={{ fontSize: "12px", color: team.p1.gender === "Female" ? "#ec4899" : "#3b82f6", fontWeight: "bold" }}>
+                              <span 
+                                style={{ 
+                                  fontSize: "20px", 
+                                  color: team.p1.gender === "Female" ? "#ec4899" : "#1d4ed8", 
+                                  fontWeight: "900",
+                                  display: "inline-block",
+                                  verticalAlign: "middle"
+                                }}
+                              >
                                 {team.p1.gender === "Female" ? "♀" : "♂"}
                               </span>
                             </div>
@@ -884,15 +908,17 @@ export default function MatchSetup({ players, onBuildMatch }) {
                               </div>
                             ) : (
                               <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-secondary)", fontStyle: "italic", fontSize: "13px" }}>
-                                <button 
-                                  type="button" 
-                                  className="btn-icon-only" 
-                                  style={{ padding: "4px", color: "var(--accent-color)" }}
-                                  onClick={() => setAssigningSlot({ teamIdx: idx, slot: "p1" })}
-                                  title="Add player"
-                                >
-                                  <UserPlus size={14} />
-                                </button>
+                                {!isAnonymous && (
+                                  <button 
+                                    type="button" 
+                                    className="btn-icon-only" 
+                                    style={{ padding: "4px", color: "var(--accent-color)" }}
+                                    onClick={() => setAssigningSlot({ teamIdx: idx, slot: "p1" })}
+                                    title="Add player"
+                                  >
+                                    <UserPlus size={14} />
+                                  </button>
+                                )}
                                 <span>Empty Slot</span>
                               </div>
                             )}
@@ -910,17 +936,27 @@ export default function MatchSetup({ players, onBuildMatch }) {
                         {team.p2 ? (
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                              <button 
-                                type="button" 
-                                className="btn-icon-only danger" 
-                                style={{ padding: "4px" }}
-                                onClick={() => handleRemovePlayerFromTeam(idx, "p2")}
-                                title="Remove player"
-                              >
-                                <UserMinus size={14} />
-                              </button>
+                              {!isAnonymous && (
+                                <button 
+                                  type="button" 
+                                  className="btn-icon-only danger" 
+                                  style={{ padding: "4px" }}
+                                  onClick={() => handleRemovePlayerFromTeam(idx, "p2")}
+                                  title="Remove player"
+                                >
+                                  <UserMinus size={14} />
+                                </button>
+                              )}
                               <span style={{ fontWeight: "600" }}>{team.p2.name}</span>
-                              <span style={{ fontSize: "12px", color: team.p2.gender === "Female" ? "#ec4899" : "#3b82f6", fontWeight: "bold" }}>
+                              <span 
+                                style={{ 
+                                  fontSize: "20px", 
+                                  color: team.p2.gender === "Female" ? "#ec4899" : "#1d4ed8", 
+                                  fontWeight: "900",
+                                  display: "inline-block",
+                                  verticalAlign: "middle"
+                                }}
+                              >
                                 {team.p2.gender === "Female" ? "♀" : "♂"}
                               </span>
                             </div>
@@ -956,15 +992,17 @@ export default function MatchSetup({ players, onBuildMatch }) {
                               </div>
                             ) : (
                               <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-secondary)", fontStyle: "italic", fontSize: "13px" }}>
-                                <button 
-                                  type="button" 
-                                  className="btn-icon-only" 
-                                  style={{ padding: "4px", color: "var(--accent-color)" }}
-                                  onClick={() => setAssigningSlot({ teamIdx: idx, slot: "p2" })}
-                                  title="Add player"
-                                >
-                                  <UserPlus size={14} />
-                                </button>
+                                {!isAnonymous && (
+                                  <button 
+                                    type="button" 
+                                    className="btn-icon-only" 
+                                    style={{ padding: "4px", color: "var(--accent-color)" }}
+                                    onClick={() => setAssigningSlot({ teamIdx: idx, slot: "p2" })}
+                                    title="Add player"
+                                  >
+                                    <UserPlus size={14} />
+                                  </button>
+                                )}
                                 <span>Empty Slot</span>
                               </div>
                             )}

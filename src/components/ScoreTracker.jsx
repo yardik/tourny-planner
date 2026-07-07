@@ -9,7 +9,7 @@ import {
   Users
 } from "lucide-react";
 
-export default function TournamentHistory({ players }) {
+export default function TournamentHistory({ players, games, history = [] }) {
   const [historyList, setHistoryList] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [activeSubTab, setActiveSubTab] = useState("playoffs"); // "playoffs" | "qualifying"
@@ -19,23 +19,13 @@ export default function TournamentHistory({ players }) {
 
   const groupKeys = ["A", "B", "C", "D"];
 
-  // Load history from localStorage
+  // Sync history prop to historyList state
   useEffect(() => {
-    const saved = localStorage.getItem("horseshoe_tournament_history");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Sort reverse chronological
-        const sorted = [...parsed].reverse();
-        setHistoryList(sorted);
-        if (sorted.length > 0) {
-          setSelectedId(sorted[0].id);
-        }
-      } catch (err) {
-        console.error("Failed to parse tournament history:", err);
-      }
+    setHistoryList(history);
+    if (history.length > 0 && (!selectedId || !history.some(e => e.id === selectedId))) {
+      setSelectedId(history[0].id);
     }
-  }, []);
+  }, [history, selectedId]);
 
   const selectedEntry = historyList.find(e => e.id === selectedId) || historyList[0];
 
@@ -539,7 +529,14 @@ export default function TournamentHistory({ players }) {
                     {groupKeys.map((group) => {
                       const bracket = tourney.rankedBrackets[group];
                       if (!bracket) return null;
-                      const numTeams = bracket.teams?.length || 0;
+                      const teamIds = new Set();
+                      (bracket.rounds || []).forEach(round => {
+                        round.forEach(game => {
+                          if (game.t1) teamIds.add(`${game.t1.p1.id}_${game.t1.p2?.id || ""}`);
+                          if (game.t2) teamIds.add(`${game.t2.p1.id}_${game.t2.p2?.id || ""}`);
+                        });
+                      });
+                      const numTeams = teamIds.size;
                       const isRR = bracket.isRoundRobin;
 
                       return (

@@ -4,8 +4,7 @@ import { Trophy, Calendar, Award, AlertCircle, Play, CheckCircle, RotateCcw, Sav
 
 const groupKeys = ["A", "B", "C", "D"];
 
-export default function TournamentBrackets({ players, games }) {
-  const [tournament, setTournament] = useState(null);
+export default function TournamentBrackets({ players, games, tournament, isAnonymous }) {
   const [scoringGame, setScoringGame] = useState(null); // { roundIdx, gameIdx, score1: "", score2: "", isPlayoffs: false, playoffGroup: "" }
   const [errorMsg, setErrorMsg] = useState("");
   
@@ -13,23 +12,6 @@ export default function TournamentBrackets({ players, games }) {
   const [activePlayoffTab, setActivePlayoffTab] = useState("A");
   const [lines, setLines] = useState([]);
   const [svgSize, setSvgSize] = useState({ width: 0, height: 0 });
-
-  // Load tournament on mount
-  useEffect(() => {
-    const loadTournament = () => {
-      try {
-        const saved = localStorage.getItem("horseshoe_active_tournament");
-        if (saved) {
-          setTournament(JSON.parse(saved));
-        } else {
-          setTournament(null);
-        }
-      } catch (err) {
-        console.error("Failed to load tournament:", err);
-      }
-    };
-    loadTournament();
-  }, []);
 
   // Recalculate bracket lines when tournament state, active tab, or viewport changes
   useEffect(() => {
@@ -118,10 +100,123 @@ export default function TournamentBrackets({ players, games }) {
   }, [tournament, activePlayoffTab, scoringGame]);
 
   // Reset/Clear active tournament (Save to history)
-  const handleResetTournament = () => {
-    if (window.confirm("Are you sure you want to end this tournament? All results (starting rounds, standings, playoff brackets, and winners) will be archived to Tournament History, and the active tournament will be reset.")) {
+  // Reset/Clear active tournament (Save to history)
+  const handleResetTournament = async () => {
+    if (!tournament) return;
+
+    // Helper to calculate winner for a group
+    const calculateGroupWinner = (groupBracket) => {
+      if (!groupBracket) return null;
+      const groupRounds = groupBracket.rounds || [];
+      if (groupRounds.length === 0) return null;
+
+      if (groupBracket.isRoundRobin) {
+        const teamMap = new Map();
+        groupRounds.forEach(round => {
+          round.forEach(game => {
+            if (game.t1) {
+              const tId = `${game.t1.p1.id}_${game.t1.p2?.id || ""}`;
+              teamMap.set(tId, game.t1);
+            }
+            if (game.t2) {
+              const tId = `${game.t2.p1.id}_${game.t2.p2?.id || ""}`;
+              teamMap.set(tId, game.t2);
+            }
+          });
+        });
+        const rrTeams = Array.from(teamMap.values());
+
+        let isFinished = true;
+        for (const round of groupRounds) {
+          for (const game of round) {
+            if (game.score1 === null || game.score2 === null) {
+              isFinished = false;
+              break;
+            }
+          }
+          if (!isFinished) break;
+        }
+        if (!isFinished) return null;
+
+        const stats = rrTeams.map(team => ({
+          team,
+          played: 0,
+          wins: 0,
+          losses: 0,
+          pointsScored: 0,
+          pointsAgainst: 0
+        }));
+
+        groupRounds.forEach(round => {
+          round.forEach(game => {
+            if (game.score1 !== null && game.score2 !== null) {
+              const t1Stat = stats.find(s => s.team.p1.id === game.t1.p1.id && s.team.p2?.id === game.t1.p2?.id);
+              const t2Stat = stats.find(s => s.team.p1.id === game.t2.p1.id && s.team.p2?.id === game.t2.p2?.id);
+
+              if (t1Stat && t2Stat) {
+                t1Stat.played++;
+                t2Stat.played++;
+                t1Stat.pointsScored += game.score1;
+                t1Stat.pointsAgainst += game.score2;
+                t2Stat.pointsScored += game.score2;
+                t2Stat.pointsAgainst += game.score1;
+
+                if (game.score1 > game.score2) {
+                  t1Stat.wins++;
+                  t2Stat.losses++;
+                } else {
+                  t2Stat.wins++;
+                  t1Stat.losses++;
+                }
+              }
+            }
+          });
+        });
+
+        stats.sort((a, b) => {
+          const diffA = a.pointsScored - a.pointsAgainst;
+          const diffB = b.pointsScored - b.pointsAgainst;
+          return b.pointsScored - a.pointsScored || diffB - diffA || b.wins - a.wins;
+        });
+
+        return stats.length > 0 ? stats[0].team : null;
+      } else {
+        const finalGame = groupRounds[groupRounds.length - 1][0];
+        if (finalGame && finalGame.score1 !== null && finalGame.score2 !== null) {
+          return finalGame.score1 > finalGame.score2 ? finalGame.t1 : finalGame.t2;
+        }
+        return null;
+      }
+    };
+
+    // Determine if the tournament is fully completed
+    let isDone = false;
+    let activeGroupsCount = 0;
+    let completedGroupsCount = 0;
+    const winners = {};
+
+    if (tournament.status === "playoffs" && tournament.rankedBrackets) {
+      groupKeys.forEach((group) => {
+        const groupBracket = tournament.rankedBrackets[group];
+        if (groupBracket && groupBracket.rounds && groupBracket.rounds.length > 0) {
+          activeGroupsCount++;
+          const champion = calculateGroupWinner(groupBracket);
+          if (champion) {
+            completedGroupsCount++;
+            winners[group] = champion;
+          }
+        }
+      });
+      isDone = activeGroupsCount > 0 && completedGroupsCount === activeGroupsCount;
+    }
+
+    const confirmMsg = isDone
+      ? "Are you sure you want to end this tournament? All results (starting rounds, standings, playoff brackets, and winners) will be archived to Tournament History, and the active tournament will be reset."
+      : "WARNING: This tournament is NOT completed yet. If you end it now, your progress will be permanently lost and it will NOT be archived to history. Are you sure you want to reset?";
+
+    if (window.confirm(confirmMsg)) {
       try {
-        if (tournament) {
+        if (isDone) {
           // Generate user-friendly timestamp
           const dateStr = new Date().toLocaleDateString("en-US", {
             year: "numeric",
@@ -131,142 +226,39 @@ export default function TournamentBrackets({ players, games }) {
             minute: "2-digit"
           });
 
-          // Fetch current history array
-          const savedHistory = localStorage.getItem("horseshoe_tournament_history");
-          const history = savedHistory ? JSON.parse(savedHistory) : [];
-
-          // Helper to calculate winner for a group
-          const calculateGroupWinner = (groupBracket) => {
-            if (!groupBracket) return null;
-            const groupRounds = groupBracket.rounds || [];
-            if (groupRounds.length === 0) return null;
-
-            if (groupBracket.isRoundRobin) {
-              const teamMap = new Map();
-              groupRounds.forEach(round => {
-                round.forEach(game => {
-                  if (game.t1) {
-                    const tId = `${game.t1.p1.id}_${game.t1.p2?.id || ""}`;
-                    teamMap.set(tId, game.t1);
-                  }
-                  if (game.t2) {
-                    const tId = `${game.t2.p1.id}_${game.t2.p2?.id || ""}`;
-                    teamMap.set(tId, game.t2);
-                  }
-                });
-              });
-              const rrTeams = Array.from(teamMap.values());
-
-              let isFinished = true;
-              for (const round of groupRounds) {
-                for (const game of round) {
-                  if (game.score1 === null || game.score2 === null) {
-                    isFinished = false;
-                    break;
-                  }
-                }
-                if (!isFinished) break;
-              }
-              if (!isFinished) return null;
-
-              const stats = rrTeams.map(team => ({
-                team,
-                played: 0,
-                wins: 0,
-                losses: 0,
-                pointsScored: 0,
-                pointsAgainst: 0
-              }));
-
-              groupRounds.forEach(round => {
-                round.forEach(game => {
-                  if (game.score1 !== null && game.score2 !== null) {
-                    const t1Stat = stats.find(s => s.team.p1.id === game.t1.p1.id && s.team.p2?.id === game.t1.p2?.id);
-                    const t2Stat = stats.find(s => s.team.p1.id === game.t2.p1.id && s.team.p2?.id === game.t2.p2?.id);
-
-                    if (t1Stat && t2Stat) {
-                      t1Stat.played++;
-                      t2Stat.played++;
-                      t1Stat.pointsScored += game.score1;
-                      t1Stat.pointsAgainst += game.score2;
-                      t2Stat.pointsScored += game.score2;
-                      t2Stat.pointsAgainst += game.score1;
-
-                      if (game.score1 > game.score2) {
-                        t1Stat.wins++;
-                        t2Stat.losses++;
-                      } else {
-                        t2Stat.wins++;
-                        t1Stat.losses++;
-                      }
-                    }
-                  }
-                });
-              });
-
-              stats.sort((a, b) => {
-                const diffA = a.pointsScored - a.pointsAgainst;
-                const diffB = b.pointsScored - b.pointsAgainst;
-                return b.pointsScored - a.pointsScored || diffB - diffA || b.wins - a.wins;
-              });
-
-              return stats.length > 0 ? stats[0].team : null;
-            } else {
-              const finalGame = groupRounds[groupRounds.length - 1][0];
-              if (finalGame && finalGame.score1 !== null && finalGame.score2 !== null) {
-                return finalGame.score1 > finalGame.score2 ? finalGame.t1 : finalGame.t2;
-              }
-              return null;
-            }
-          };
-
-          // Calculate winners for groups A, B, C, D
-          const winners = {};
-          if (tournament.status === "playoffs" && tournament.rankedBrackets) {
-            groupKeys.forEach((group) => {
-              const groupBracket = tournament.rankedBrackets[group];
-              if (groupBracket) {
-                const champion = calculateGroupWinner(groupBracket);
-                if (champion) {
-                  winners[group] = champion;
-                }
-              }
-            });
-          }
-
           // Build and save new history entry
           const newEntry = {
             id: tournament.id || "t_" + Date.now(),
             date: dateStr,
             winners: winners,
-            tournament: tournament
+            tournament: tournament,
+            createdAt: new Date().toISOString()
           };
 
-          history.push(newEntry);
-          localStorage.setItem("horseshoe_tournament_history", JSON.stringify(history));
+          await db.addTournamentToHistory(newEntry);
           alert("Tournament archived to history successfully!");
+        } else {
+          alert("Active tournament reset. (Unfinished tournament was not archived to history).");
         }
       } catch (err) {
         console.error("Failed to save tournament to history:", err);
       }
 
       // Reset states
-      localStorage.removeItem("horseshoe_active_tournament");
-      setTournament(null);
+      await db.saveActiveTournament(null);
       setScoringGame(null);
     }
   };
 
   // Reset playoffs and return to starting rounds
-  const handleResetPlayoffs = () => {
+  const handleResetPlayoffs = async () => {
     if (window.confirm("Are you sure you want to delete all playoff brackets and return to editing the qualifying/starting rounds? All playoff match scores and bracket progress will be lost.")) {
       const updatedTournament = {
         ...tournament,
         status: "starting",
         rankedBrackets: null
       };
-      setTournament(updatedTournament);
-      localStorage.setItem("horseshoe_active_tournament", JSON.stringify(updatedTournament));
+      await db.saveActiveTournament(updatedTournament);
       setScoringGame(null);
     }
   };
@@ -369,8 +361,7 @@ export default function TournamentBrackets({ players, games }) {
           }
         };
 
-        setTournament(updatedTournament);
-        localStorage.setItem("horseshoe_active_tournament", JSON.stringify(updatedTournament));
+        await db.saveActiveTournament(updatedTournament);
 
         // Sync individual database scores (tg_1_ and tg_2_)
         if (team1 && team2) {
@@ -394,8 +385,7 @@ export default function TournamentBrackets({ players, games }) {
           rounds: updatedRounds
         };
 
-        setTournament(updatedTournament);
-        localStorage.setItem("horseshoe_active_tournament", JSON.stringify(updatedTournament));
+        await db.saveActiveTournament(updatedTournament);
 
         if (team1 && team2) {
           await syncDatabaseIndividualScores(game.id, team1, team2, s1, s2, dateStr);
@@ -534,7 +524,7 @@ export default function TournamentBrackets({ players, games }) {
   };
 
   // Generate Ranked Single-Elimination Bracket for playoffs
-  const handleGeneratePlayoffs = () => {
+  const handleGeneratePlayoffs = async () => {
     const finalStandings = getStandings(); // sorted teams desc
     const T = finalStandings.length;
 
@@ -876,8 +866,7 @@ export default function TournamentBrackets({ players, games }) {
       rankedBrackets
     };
 
-    setTournament(updatedTournament);
-    localStorage.setItem("horseshoe_active_tournament", JSON.stringify(updatedTournament));
+    await db.saveActiveTournament(updatedTournament);
   };
 
   if (!tournament) {
@@ -886,7 +875,7 @@ export default function TournamentBrackets({ players, games }) {
         <Trophy size={64} style={{ color: "var(--text-secondary)", opacity: 0.3, marginBottom: "16px" }} />
         <h2 style={{ fontSize: "22px", fontWeight: "700", marginBottom: "8px" }}>No Active Tournament</h2>
         <p style={{ color: "var(--text-secondary)", maxWidth: "500px", margin: "0 auto 24px auto" }}>
-          Generate your teams under the <strong>Match Setup</strong> tab, then click the <strong>Build Match with These Teams</strong> button to generate your 3-round starting bracket.
+          Generate your teams under the <strong>Teams</strong> tab, then click the <strong>Build Match with These Teams</strong> button to generate your 3-round starting bracket.
         </p>
       </div>
     );
@@ -1066,7 +1055,7 @@ export default function TournamentBrackets({ players, games }) {
           </div>
 
           {/* Playoff scoring input controls */}
-          {isRecording ? (
+          {!isAnonymous && (isRecording ? (
             <form onSubmit={handleSaveScore} style={{ borderTop: "1px solid var(--border-color)", paddingTop: "6px", marginTop: "4px" }}>
               <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
                 <input 
@@ -1121,7 +1110,7 @@ export default function TournamentBrackets({ players, games }) {
                 </button>
               </div>
             )
-          )}
+          ))}
         </div>
       </div>
     );
@@ -1146,16 +1135,18 @@ export default function TournamentBrackets({ players, games }) {
               : "Score matches and complete all 3 rounds to unlock playoffs."}
           </p>
         </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          {isPlayoffs && (
-            <button type="button" className="btn btn-secondary" onClick={handleResetPlayoffs}>
-              <RotateCcw size={16} /> Reset Playoffs
+        {!isAnonymous && (
+          <div style={{ display: "flex", gap: "10px" }}>
+            {isPlayoffs && (
+              <button type="button" className="btn btn-secondary" onClick={handleResetPlayoffs}>
+                <RotateCcw size={16} /> Reset Playoffs
+              </button>
+            )}
+            <button type="button" className="btn btn-danger" onClick={handleResetTournament}>
+              <RotateCcw size={16} /> End Tournament
             </button>
-          )}
-          <button type="button" className="btn btn-danger" onClick={handleResetTournament}>
-            <RotateCcw size={16} /> End Tournament
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {!isPlayoffs ? (
@@ -1181,9 +1172,11 @@ export default function TournamentBrackets({ players, games }) {
                   <h4 style={{ color: "var(--success-color)", fontSize: "16px", fontWeight: "700", margin: "0 0 4px 0" }}>All Matches Complete!</h4>
                   <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0 }}>Starting rounds finished. You can now generate the single elimination playoffs.</p>
                 </div>
-                <button type="button" className="btn btn-primary" style={{ gap: "8px" }} onClick={handleGeneratePlayoffs}>
-                  <Trophy size={16} /> Generate Playoffs Brackets <ArrowRight size={16} />
-                </button>
+                {!isAnonymous && (
+                  <button type="button" className="btn btn-primary" style={{ gap: "8px" }} onClick={handleGeneratePlayoffs}>
+                    <Trophy size={16} /> Generate Playoffs Brackets <ArrowRight size={16} />
+                  </button>
+                )}
               </div>
             )}
 
@@ -1315,7 +1308,7 @@ export default function TournamentBrackets({ players, games }) {
                         </div>
 
                         {/* Scoring Inputs Form overlay */}
-                        {isRecording ? (
+                        {!isAnonymous && (isRecording ? (
                           <form onSubmit={handleSaveScore} style={{ borderTop: "1px solid var(--border-color)", paddingTop: "10px", marginTop: "4px" }}>
                             <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "8px" }}>
                               <div style={{ flex: 1 }}>
@@ -1373,7 +1366,7 @@ export default function TournamentBrackets({ players, games }) {
                               {isScored ? "Edit Score" : "Record Score"}
                             </button>
                           </div>
-                        )}
+                        ))}
                       </div>
                     );
                   })}
@@ -1742,7 +1735,7 @@ export default function TournamentBrackets({ players, games }) {
                                   </div>
 
                                   {/* Scoring inputs */}
-                                  {isRecording ? (
+                                  {!isAnonymous && (isRecording ? (
                                     <form onSubmit={handleSaveScore} style={{ borderTop: "1px solid var(--border-color)", paddingTop: "10px", marginTop: "4px" }}>
                                       <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "8px" }}>
                                         <div style={{ flex: 1 }}>
@@ -1800,7 +1793,7 @@ export default function TournamentBrackets({ players, games }) {
                                         {isScored ? "Edit Score" : "Record Score"}
                                       </button>
                                     </div>
-                                  )}
+                                  ))}
                                 </div>
                               );
                             })}

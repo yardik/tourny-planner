@@ -1,5 +1,6 @@
 import { initializeApp, getApps, deleteApp } from "firebase/app";
 import { 
+  getFirestore,
   initializeFirestore, 
   persistentLocalCache, 
   persistentMultipleTabManager,
@@ -13,18 +14,105 @@ import {
   orderBy,
   writeBatch
 } from "firebase/firestore";
+import { 
+  getAuth, 
+  signInAnonymously, 
+  onAuthStateChanged, 
+  signOut, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup
+} from "firebase/auth";
+
+// Check for git-ignored local configuration file
+const localConfigs = import.meta.glob("./firebase.config.local.js", { eager: true });
+const localFirebaseConfig = localConfigs["./firebase.config.local.js"]?.default || null;
+console.log("localConfigs keys:", Object.keys(localConfigs), "localFirebaseConfig:", localFirebaseConfig);
 
 // Cache keys for localStorage fallback
 const STORAGE_KEYS = {
   PLAYERS: "horseshoe_players",
   GAMES: "horseshoe_games",
+  HISTORY: "horseshoe_tournament_history",
+  ACTIVE_TOURNAMENT: "horseshoe_active_tournament",
+  MATCH_SETUP: "horseshoe_match_setup_data",
   FIREBASE_CONFIG: "horseshoe_fb_config"
 };
+
+// Convert any array of arrays in a tournament object to a map of arrays for Firestore compatibility
+function serializeTournament(tournament) {
+  if (!tournament) return null;
+  const copy = JSON.parse(JSON.stringify(tournament));
+  
+  // 1. Serialize starting rounds
+  if (Array.isArray(copy.rounds)) {
+    const roundsMap = {};
+    copy.rounds.forEach((round, rIdx) => {
+      roundsMap[`r${rIdx}`] = round;
+    });
+    copy.rounds = roundsMap;
+  }
+  
+  // 2. Serialize playoff brackets
+  if (copy.rankedBrackets) {
+    Object.keys(copy.rankedBrackets).forEach(group => {
+      const groupBracket = copy.rankedBrackets[group];
+      if (groupBracket && Array.isArray(groupBracket.rounds)) {
+        const roundsMap = {};
+        groupBracket.rounds.forEach((round, rIdx) => {
+          roundsMap[`r${rIdx}`] = round;
+        });
+        groupBracket.rounds = roundsMap;
+      }
+    });
+  }
+  
+  return copy;
+}
+
+// Convert the serialized map-based rounds back to standard 2D arrays
+function deserializeTournament(serialized) {
+  if (!serialized) return null;
+  const copy = JSON.parse(JSON.stringify(serialized));
+  
+  // 1. Deserialize starting rounds
+  if (copy.rounds && !Array.isArray(copy.rounds)) {
+    const roundsList = [];
+    let rIdx = 0;
+    while (copy.rounds[`r${rIdx}`] !== undefined) {
+      roundsList.push(copy.rounds[`r${rIdx}`]);
+      rIdx++;
+    }
+    copy.rounds = roundsList;
+  }
+  
+  // 2. Deserialize playoff brackets
+  if (copy.rankedBrackets) {
+    Object.keys(copy.rankedBrackets).forEach(group => {
+      const groupBracket = copy.rankedBrackets[group];
+      if (groupBracket && groupBracket.rounds && !Array.isArray(groupBracket.rounds)) {
+        const roundsList = [];
+        let rIdx = 0;
+        while (groupBracket.rounds[`r${rIdx}`] !== undefined) {
+          roundsList.push(groupBracket.rounds[`r${rIdx}`]);
+          rIdx++;
+        }
+        groupBracket.rounds = roundsList;
+      }
+    });
+  }
+  
+  return copy;
+}
 
 class DatabaseService {
   constructor() {
     this.firebaseApp = null;
     this.firestore = null;
+    this.auth = null;
+    this.user = null;
+    
     this.isFirebaseReady = false;
     this.syncStatus = "offline-only"; // "offline-only" | "syncing" | "synced" | "error"
     this.syncErrorMsg = "";
@@ -33,21 +121,39 @@ class DatabaseService {
     this.statusListeners = new Set();
     this.playersCallbacks = new Set();
     this.gamesCallbacks = new Set();
+    this.historyCallbacks = new Set();
+    this.activeTournamentCallbacks = new Set();
+    this.matchSetupCallbacks = new Set();
+    this.authListeners = new Set();
     
     // Local memory caches
     this.playersCache = [];
     this.gamesCache = [];
+    this.historyCache = [];
+    this.activeTournamentCache = null;
+    this.matchSetupCache = { selectedPlayerIds: [], generatedTeams: [], isGenerated: false };
     
     // Active subscription listeners
     this.firestorePlayersUnsub = null;
     this.firestoreGamesUnsub = null;
+    this.firestoreHistoryUnsub = null;
+    this.firestoreActiveTournamentUnsub = null;
+    this.firestoreMatchSetupUnsub = null;
     this.isStorageListenerActive = false;
 
     // Try to auto-initialize if config exists in localStorage
+    console.log("DatabaseService init - local config:", localFirebaseConfig);
+    console.log("DatabaseService init - sync preference:", this.getSyncPreference());
+    console.log("DatabaseService init - active firebase config:", this.getFirebaseConfig());
     this.initFirebaseFromStorage();
     
     // Setup initial subscriptions (starts offline or online depending on config success)
     this.setupInternalSubscriptions();
+  }
+
+  // Helper: returns true if the current user is anonymous (not signed in with Google)
+  isAnonymousUser() {
+    return !this.user || this.user.isAnonymous;
   }
 
   // --- Theme helper ---
@@ -89,13 +195,37 @@ class DatabaseService {
   // Helper to read players list directly from localStorage
   getLocalPlayersList() {
     const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.PLAYERS) || "[]");
-    return list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return list.sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
   }
 
   // Helper to read games list directly from localStorage
   getLocalGamesList() {
     const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.GAMES) || "[]");
-    return list.sort((a, b) => new Date(b.date) - new Date(a.date));
+    return list.sort((a, b) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateB - dateA;
+    });
+  }
+
+  // Helper to read tournament history list directly from localStorage
+  getLocalHistoryList() {
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]");
+    return list.sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
+  }
+
+  // Helper to read active tournament directly from localStorage
+  getLocalActiveTournament() {
+    const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_TOURNAMENT);
+    return saved ? JSON.parse(saved) : null;
   }
 
   // Setup listeners for the active database backend (Local vs Firestore)
@@ -109,6 +239,18 @@ class DatabaseService {
       this.firestoreGamesUnsub();
       this.firestoreGamesUnsub = null;
     }
+    if (this.firestoreHistoryUnsub) {
+      this.firestoreHistoryUnsub();
+      this.firestoreHistoryUnsub = null;
+    }
+    if (this.firestoreActiveTournamentUnsub) {
+      this.firestoreActiveTournamentUnsub();
+      this.firestoreActiveTournamentUnsub = null;
+    }
+    if (this.firestoreMatchSetupUnsub) {
+      this.firestoreMatchSetupUnsub();
+      this.firestoreMatchSetupUnsub = null;
+    }
 
     // 2. Set up new subscriptions based on connection state
     if (this.isFirebaseReady && this.firestore) {
@@ -120,6 +262,9 @@ class DatabaseService {
             players.push(doc.data());
           });
           this.playersCache = players;
+          if (!this.isAnonymousUser()) {
+            localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(players));
+          }
           this.notifyPlayers();
           this.syncStatus = "synced";
           this.notifyStatus();
@@ -129,8 +274,10 @@ class DatabaseService {
           this.syncStatus = "error";
           this.syncErrorMsg = "Sync failed: " + error.message;
           this.notifyStatus();
-          // Fall back to local list on snapshot error
-          this.playersCache = this.getLocalPlayersList();
+          // Fall back to local list on snapshot error (only for authenticated users)
+          if (!this.isAnonymousUser()) {
+            this.playersCache = this.getLocalPlayersList();
+          }
           this.notifyPlayers();
         }
       );
@@ -143,20 +290,109 @@ class DatabaseService {
             games.push(doc.data());
           });
           this.gamesCache = games;
+          if (!this.isAnonymousUser()) {
+            localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(games));
+          }
           this.notifyGames();
         },
         (error) => {
           console.error("Games subscription error:", error);
-          this.gamesCache = this.getLocalGamesList();
+          if (!this.isAnonymousUser()) {
+            this.gamesCache = this.getLocalGamesList();
+          }
           this.notifyGames();
+        }
+      );
+
+      const qHistory = query(collection(this.firestore, "tournament_history"), orderBy("createdAt", "desc"));
+      this.firestoreHistoryUnsub = onSnapshot(qHistory, 
+        (snapshot) => {
+          const history = [];
+          snapshot.forEach(doc => {
+            const entry = doc.data();
+            if (entry.tournament) {
+              entry.tournament = deserializeTournament(entry.tournament);
+            }
+            history.push(entry);
+          });
+          this.historyCache = history;
+          if (!this.isAnonymousUser()) {
+            localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
+          }
+          this.notifyHistory();
+        },
+        (error) => {
+          console.error("History subscription error:", error);
+          if (!this.isAnonymousUser()) {
+            this.historyCache = this.getLocalHistoryList();
+          }
+          this.notifyHistory();
+        }
+      );
+
+      const docRef = doc(this.firestore, "active_tournament", "current");
+      this.firestoreActiveTournamentUnsub = onSnapshot(docRef, 
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            const deserialized = deserializeTournament(data);
+            this.activeTournamentCache = deserialized;
+            if (!this.isAnonymousUser()) {
+              localStorage.setItem(STORAGE_KEYS.ACTIVE_TOURNAMENT, JSON.stringify(deserialized));
+            }
+          } else {
+            this.activeTournamentCache = null;
+            if (!this.isAnonymousUser()) {
+              localStorage.removeItem(STORAGE_KEYS.ACTIVE_TOURNAMENT);
+            }
+          }
+          this.notifyActiveTournament();
+        },
+        (error) => {
+          console.error("Active tournament subscription error:", error);
+          if (!this.isAnonymousUser()) {
+            this.activeTournamentCache = this.getLocalActiveTournament();
+          }
+          this.notifyActiveTournament();
+        }
+      );
+      const matchSetupDocRef = doc(this.firestore, "match_setup", "current");
+      this.firestoreMatchSetupUnsub = onSnapshot(matchSetupDocRef, 
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            this.matchSetupCache = data;
+            if (!this.isAnonymousUser()) {
+              localStorage.setItem(STORAGE_KEYS.MATCH_SETUP, JSON.stringify(data));
+            }
+          } else {
+            this.matchSetupCache = { selectedPlayerIds: [], generatedTeams: [], isGenerated: false };
+            if (!this.isAnonymousUser()) {
+              localStorage.removeItem(STORAGE_KEYS.MATCH_SETUP);
+            }
+          }
+          this.notifyMatchSetup();
+        },
+        (error) => {
+          console.error("Match setup subscription error:", error);
+          if (!this.isAnonymousUser()) {
+            this.matchSetupCache = this.getLocalMatchSetup();
+          }
+          this.notifyMatchSetup();
         }
       );
     } else {
       // Local storage fallback setup
       this.playersCache = this.getLocalPlayersList();
       this.gamesCache = this.getLocalGamesList();
+      this.historyCache = this.getLocalHistoryList();
+      this.activeTournamentCache = this.getLocalActiveTournament();
+      this.matchSetupCache = this.getLocalMatchSetup();
       this.notifyPlayers();
       this.notifyGames();
+      this.notifyHistory();
+      this.notifyActiveTournament();
+      this.notifyMatchSetup();
     }
 
     // Setup cross-tab sync listener for offline changes
@@ -170,6 +406,18 @@ class DatabaseService {
           if (e.key === STORAGE_KEYS.GAMES) {
             this.gamesCache = this.getLocalGamesList();
             this.notifyGames();
+          }
+          if (e.key === STORAGE_KEYS.HISTORY) {
+            this.historyCache = this.getLocalHistoryList();
+            this.notifyHistory();
+          }
+          if (e.key === STORAGE_KEYS.ACTIVE_TOURNAMENT) {
+            this.activeTournamentCache = this.getLocalActiveTournament();
+            this.notifyActiveTournament();
+          }
+          if (e.key === STORAGE_KEYS.MATCH_SETUP) {
+            this.matchSetupCache = this.getLocalMatchSetup();
+            this.notifyMatchSetup();
           }
         }
       });
@@ -185,12 +433,75 @@ class DatabaseService {
     this.gamesCallbacks.forEach(cb => cb([...this.gamesCache]));
   }
 
+  getSyncPreference() {
+    return localStorage.getItem("horseshoe_sync_preference") || "online";
+  }
+
+  async setSyncPreference(preference) {
+    localStorage.setItem("horseshoe_sync_preference", preference);
+    
+    if (preference === "offline") {
+      // Tear down Firestore subscriptions FIRST to avoid active error triggers on shutdown
+      if (this.firestorePlayersUnsub) {
+        this.firestorePlayersUnsub();
+        this.firestorePlayersUnsub = null;
+      }
+      if (this.firestoreGamesUnsub) {
+        this.firestoreGamesUnsub();
+        this.firestoreGamesUnsub = null;
+      }
+      if (this.firestoreHistoryUnsub) {
+        this.firestoreHistoryUnsub();
+        this.firestoreHistoryUnsub = null;
+      }
+      if (this.firestoreActiveTournamentUnsub) {
+        this.firestoreActiveTournamentUnsub();
+        this.firestoreActiveTournamentUnsub = null;
+      }
+      if (this.firestoreMatchSetupUnsub) {
+        this.firestoreMatchSetupUnsub();
+        this.firestoreMatchSetupUnsub = null;
+      }
+
+      // Tear down Firebase connection completely
+      const apps = getApps();
+      if (apps.length > 0) {
+        await deleteApp(apps[0]);
+      }
+      this.firebaseApp = null;
+      this.firestore = null;
+      this.auth = null;
+      this.user = null;
+      this.isFirebaseReady = false;
+      this.syncStatus = "offline-only";
+      this.syncErrorMsg = "";
+      this.notifyStatus();
+      this.notifyAuth();
+      this.setupInternalSubscriptions();
+    } else {
+      // Re-initialize Firebase if config is present
+      const config = this.getFirebaseConfig();
+      if (config) {
+        await this.initializeFirebase(config);
+      } else {
+        this.syncStatus = "offline-only";
+        this.notifyStatus();
+        this.setupInternalSubscriptions();
+      }
+    }
+  }
+
   // --- Firebase Initialization ---
   initFirebaseFromStorage() {
-    const savedConfig = localStorage.getItem(STORAGE_KEYS.FIREBASE_CONFIG);
-    if (savedConfig) {
+    const preference = this.getSyncPreference();
+    if (preference === "offline") {
+      this.syncStatus = "offline-only";
+      return;
+    }
+
+    const config = this.getFirebaseConfig();
+    if (config) {
       try {
-        const config = JSON.parse(savedConfig);
         // We set flags, but actual initialization of Firebase is async or done in constructor.
         // To prevent blocking, we attempt to initialize.
         this.syncStatus = "syncing";
@@ -215,7 +526,7 @@ class DatabaseService {
     }
   }
 
-  async initializeFirebase(config) {
+  async initializeFirebase(config, saveToLocalFile = false) {
     if (!config || !config.projectId) {
       this.syncStatus = "offline-only";
       this.notifyStatus();
@@ -228,24 +539,56 @@ class DatabaseService {
       this.notifyStatus();
 
       // Clear existing app if any
-      const apps = getApps();
-      if (apps.length > 0) {
-        await deleteApp(apps[0]);
+      try {
+        const apps = getApps();
+        if (apps.length > 0) {
+          await deleteApp(apps[0]);
+        }
+      } catch (deleteErr) {
+        console.warn("Error deleting previous Firebase app:", deleteErr);
       }
 
       this.firebaseApp = initializeApp(config);
       
       // Initialize Firestore with robust offline cache
-      this.firestore = initializeFirestore(this.firebaseApp, {
-        localCache: persistentLocalCache({
-          tabManager: persistentMultipleTabManager()
-        })
+      try {
+        this.firestore = initializeFirestore(this.firebaseApp, {
+          localCache: persistentLocalCache({
+            tabManager: persistentMultipleTabManager()
+          })
+        });
+      } catch (firestoreErr) {
+        console.warn("Firestore already initialized or cache failed, falling back to getFirestore:", firestoreErr);
+        this.firestore = getFirestore(this.firebaseApp);
+      }
+
+      // Initialize Firebase Auth
+      this.auth = getAuth(this.firebaseApp);
+      
+      // Listen to Auth State Changes
+      onAuthStateChanged(this.auth, (user) => {
+        this.user = user;
+        this.notifyAuth();
       });
+
+      // Trigger anonymous login by default if not logged in to satisfy auth security rules
+      try {
+        if (!this.auth.currentUser) {
+          await signInAnonymously(this.auth);
+        }
+      } catch (authErr) {
+        console.warn("Background anonymous sign-in failed or is disabled on Firebase Console:", authErr.message);
+      }
 
       this.isFirebaseReady = true;
       this.syncStatus = "synced";
       this.syncErrorMsg = "";
       localStorage.setItem(STORAGE_KEYS.FIREBASE_CONFIG, JSON.stringify(config));
+      
+      // Attempt to save to local config file if running locally and explicitly requested
+      if (saveToLocalFile) {
+        this.saveLocalConfig(config);
+      }
       
       this.notifyStatus();
       
@@ -256,7 +599,7 @@ class DatabaseService {
       await this.migrateLocalDataToFirebase();
       return true;
     } catch (err) {
-      console.error("Firebase initialization failed:", err);
+      console.error("Firebase initialization failed (stringified):", err ? (err.message || String(err)) : "unknown error", err);
       this.isFirebaseReady = false;
       this.syncStatus = "error";
       this.syncErrorMsg = err.message;
@@ -274,17 +617,93 @@ class DatabaseService {
     }
     this.firebaseApp = null;
     this.firestore = null;
+    this.auth = null;
+    this.user = null;
     this.isFirebaseReady = false;
     this.syncStatus = "offline-only";
     this.syncErrorMsg = "";
     localStorage.removeItem(STORAGE_KEYS.FIREBASE_CONFIG);
     this.notifyStatus();
+    this.notifyAuth();
     
     // Switch subscriptions back to offline local storage
     this.setupInternalSubscriptions();
   }
 
+  async saveLocalConfig(config) {
+    try {
+      await fetch("/api/save-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config })
+      });
+    } catch {
+      // Ignored: this is normal in production since the /api endpoint only exists in local development server
+    }
+  }
+
+  // --- Auth Subscription and Operations ---
+  subscribeAuth(onUpdate) {
+    this.authListeners.add(onUpdate);
+    // Send immediate initial value
+    onUpdate(this.user);
+    return () => {
+      this.authListeners.delete(onUpdate);
+    };
+  }
+
+  notifyAuth() {
+    this.authListeners.forEach(listener => listener(this.user));
+  }
+
+  getCurrentUser() {
+    return this.user;
+  }
+
+  async registerWithEmail(email, password) {
+    if (!this.isFirebaseReady || !this.auth) {
+      throw new Error("Cloud sync is not connected. Connect Firebase first.");
+    }
+    // Create new email user credentials
+    const credential = await createUserWithEmailAndPassword(this.auth, email, password);
+    this.user = credential.user;
+    this.notifyAuth();
+    return credential.user;
+  }
+
+  async loginWithEmail(email, password) {
+    if (!this.isFirebaseReady || !this.auth) {
+      throw new Error("Cloud sync is not connected. Connect Firebase first.");
+    }
+    const credential = await signInWithEmailAndPassword(this.auth, email, password);
+    this.user = credential.user;
+    this.notifyAuth();
+    return credential.user;
+  }
+
+  async loginWithGoogle() {
+    if (!this.isFirebaseReady || !this.auth) {
+      throw new Error("Cloud sync is not connected. Connect Firebase first.");
+    }
+    const provider = new GoogleAuthProvider();
+    const result = await signInWithPopup(this.auth, provider);
+    this.user = result.user;
+    this.notifyAuth();
+    return result.user;
+  }
+
+  async logoutUser() {
+    if (this.auth) {
+      await signOut(this.auth);
+      // Re-sign in anonymously to keep database accessible under auth rules
+      await signInAnonymously(this.auth);
+    }
+  }
+
   getFirebaseConfig() {
+    if (localFirebaseConfig) {
+      return localFirebaseConfig;
+    }
     const saved = localStorage.getItem(STORAGE_KEYS.FIREBASE_CONFIG);
     return saved ? JSON.parse(saved) : null;
   }
@@ -296,8 +715,10 @@ class DatabaseService {
     try {
       const localPlayers = JSON.parse(localStorage.getItem(STORAGE_KEYS.PLAYERS) || "[]");
       const localGames = JSON.parse(localStorage.getItem(STORAGE_KEYS.GAMES) || "[]");
+      const localHistory = JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]");
+      const localActive = localStorage.getItem(STORAGE_KEYS.ACTIVE_TOURNAMENT);
 
-      if (localPlayers.length === 0 && localGames.length === 0) return;
+      if (localPlayers.length === 0 && localGames.length === 0 && localHistory.length === 0 && localActive === null) return;
 
       // Migrate players in batch
       if (localPlayers.length > 0) {
@@ -307,8 +728,6 @@ class DatabaseService {
           batch.set(playerDoc, player, { merge: true });
         });
         await batch.commit();
-        // Clear local storage list since it is migrated
-        localStorage.removeItem(STORAGE_KEYS.PLAYERS);
       }
 
       // Migrate games in batch
@@ -319,14 +738,36 @@ class DatabaseService {
           batch.set(gameDoc, game, { merge: true });
         });
         await batch.commit();
-        // Clear local storage list since it is migrated
-        localStorage.removeItem(STORAGE_KEYS.GAMES);
+      }
+
+      // Migrate tournament history in batch
+      if (localHistory.length > 0) {
+        const batch = writeBatch(this.firestore);
+        localHistory.forEach(entry => {
+          const historyDoc = doc(this.firestore, "tournament_history", entry.id);
+          const serializedEntry = {
+            ...entry,
+            createdAt: entry.createdAt || new Date().toISOString()
+          };
+          if (serializedEntry.tournament) {
+            serializedEntry.tournament = serializeTournament(serializedEntry.tournament);
+          }
+          batch.set(historyDoc, serializedEntry, { merge: true });
+        });
+        await batch.commit();
+      }
+
+      // Migrate active tournament
+      if (localActive) {
+        const docRef = doc(this.firestore, "active_tournament", "current");
+        const parsed = JSON.parse(localActive);
+        const serialized = serializeTournament(parsed);
+        await setDoc(docRef, serialized);
       }
 
       console.log("Migration to Firebase completed successfully.");
     } catch (err) {
       console.error("Migration failed:", err);
-      // Keep local storage data intact so we don't lose it
     }
   }
 
@@ -347,58 +788,55 @@ class DatabaseService {
       createdAt: new Date().toISOString()
     };
 
+    // Always update local storage and memory cache immediately for instant offline resilience
+    const players = this.getLocalPlayersList();
+    players.push(newPlayer);
+    localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(players));
+    this.playersCache = players.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    this.notifyPlayers();
+
     if (this.isFirebaseReady && this.firestore) {
       const playerDoc = doc(this.firestore, "players", player.id);
       await setDoc(playerDoc, newPlayer);
-    } else {
-      const players = this.getLocalPlayersList();
-      players.push(newPlayer);
-      localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(players));
-      
-      // Update memory cache and notify active subscribers immediately
-      this.playersCache = players.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      this.notifyPlayers();
     }
   }
 
   async updatePlayer(player) {
+    // Always update local storage and memory cache immediately for instant offline resilience
+    const players = this.getLocalPlayersList();
+    const idx = players.findIndex(p => p.id === player.id);
+    if (idx !== -1) {
+      players[idx] = { ...players[idx], ...player };
+      localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(players));
+      this.playersCache = players.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      this.notifyPlayers();
+    }
+
     if (this.isFirebaseReady && this.firestore) {
       const playerDoc = doc(this.firestore, "players", player.id);
       await updateDoc(playerDoc, player);
-    } else {
-      const players = this.getLocalPlayersList();
-      const idx = players.findIndex(p => p.id === player.id);
-      if (idx !== -1) {
-        players[idx] = { ...players[idx], ...player };
-        localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(players));
-        
-        // Update memory cache and notify active subscribers immediately
-        this.playersCache = players.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        this.notifyPlayers();
-      }
     }
   }
 
   async deletePlayer(playerId) {
+    // Always update local storage and memory cache immediately for instant offline resilience
+    let players = this.getLocalPlayersList();
+    players = players.filter(p => p.id !== playerId);
+    localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(players));
+    this.playersCache = players.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    // Also delete this player's games to maintain consistency
+    let games = this.getLocalGamesList();
+    games = games.filter(g => g.player1Id !== playerId && g.player2Id !== playerId);
+    localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(games));
+    this.gamesCache = games.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    this.notifyPlayers();
+    this.notifyGames();
+
     if (this.isFirebaseReady && this.firestore) {
       const playerDoc = doc(this.firestore, "players", playerId);
       await deleteDoc(playerDoc);
-    } else {
-      let players = this.getLocalPlayersList();
-      players = players.filter(p => p.id !== playerId);
-      localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(players));
-      
-      // Also delete this player's games to maintain consistency
-      let games = this.getLocalGamesList();
-      games = games.filter(g => g.player1Id !== playerId && g.player2Id !== playerId);
-      localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(games));
-      
-      // Update memory cache and notify active subscribers immediately
-      this.playersCache = players.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      this.gamesCache = games.sort((a, b) => new Date(b.date) - new Date(a.date));
-      
-      this.notifyPlayers();
-      this.notifyGames();
     }
   }
 
@@ -419,32 +857,163 @@ class DatabaseService {
       date: new Date().toISOString()
     };
 
+    // Always update local storage and memory cache immediately for instant offline resilience
+    const games = this.getLocalGamesList();
+    games.push(newGame);
+    localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(games));
+    this.gamesCache = games.sort((a, b) => new Date(b.date) - new Date(a.date));
+    this.notifyGames();
+
     if (this.isFirebaseReady && this.firestore) {
       const gameDoc = doc(this.firestore, "games", game.id);
       await setDoc(gameDoc, newGame);
-    } else {
-      const games = this.getLocalGamesList();
-      games.push(newGame);
-      localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(games));
-      
-      // Update memory cache and notify active subscribers immediately
-      this.gamesCache = games.sort((a, b) => new Date(b.date) - new Date(a.date));
-      this.notifyGames();
     }
   }
 
   async deleteGame(gameId) {
+    // Always update local storage and memory cache immediately for instant offline resilience
+    let games = this.getLocalGamesList();
+    games = games.filter(g => g.id !== gameId);
+    localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(games));
+    this.gamesCache = games.sort((a, b) => new Date(b.date) - new Date(a.date));
+    this.notifyGames();
+
     if (this.isFirebaseReady && this.firestore) {
       const gameDoc = doc(this.firestore, "games", gameId);
       await deleteDoc(gameDoc);
+    }
+  }
+
+  // --- Tournament History CRUD Operations ---
+
+  subscribeHistory(onUpdate) {
+    this.historyCallbacks.add(onUpdate);
+    // Notify immediately with current cached list
+    onUpdate([...this.historyCache]);
+    return () => {
+      this.historyCallbacks.delete(onUpdate);
+    };
+  }
+
+  notifyHistory() {
+    this.historyCallbacks.forEach(cb => cb([...this.historyCache]));
+  }
+
+  async addTournamentToHistory(entry) {
+    const newEntry = {
+      ...entry,
+      createdAt: entry.createdAt || new Date().toISOString()
+    };
+
+    // Always update local storage and memory cache immediately for instant offline resilience
+    const history = this.getLocalHistoryList();
+    history.push(newEntry);
+    localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
+    this.historyCache = history.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    this.notifyHistory();
+
+    if (this.isFirebaseReady && this.firestore) {
+      const historyDoc = doc(this.firestore, "tournament_history", newEntry.id);
+      const serializedEntry = { ...newEntry };
+      if (serializedEntry.tournament) {
+        serializedEntry.tournament = serializeTournament(serializedEntry.tournament);
+      }
+      await setDoc(historyDoc, serializedEntry);
+    }
+  }
+
+  async deleteTournamentFromHistory(id) {
+    // Always update local storage and memory cache immediately for instant offline resilience
+    let history = this.getLocalHistoryList();
+    history = history.filter(item => item.id !== id);
+    localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
+    this.historyCache = history.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    this.notifyHistory();
+
+    if (this.isFirebaseReady && this.firestore) {
+      const docRef = doc(this.firestore, "tournament_history", id);
+      await deleteDoc(docRef);
+    }
+  }
+
+  // --- Active Tournament CRUD Operations ---
+
+  subscribeActiveTournament(onUpdate) {
+    this.activeTournamentCallbacks.add(onUpdate);
+    // Notify immediately with current cached object
+    onUpdate(this.activeTournamentCache);
+    return () => {
+      this.activeTournamentCallbacks.delete(onUpdate);
+    };
+  }
+
+  notifyActiveTournament() {
+    this.activeTournamentCallbacks.forEach(cb => cb(this.activeTournamentCache));
+  }
+
+  async saveActiveTournament(tournament) {
+    // Always update local storage and memory cache immediately for instant offline resilience
+    if (tournament === null) {
+      localStorage.removeItem(STORAGE_KEYS.ACTIVE_TOURNAMENT);
     } else {
-      let games = this.getLocalGamesList();
-      games = games.filter(g => g.id !== gameId);
-      localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(games));
-      
-      // Update memory cache and notify active subscribers immediately
-      this.gamesCache = games.sort((a, b) => new Date(b.date) - new Date(a.date));
-      this.notifyGames();
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_TOURNAMENT, JSON.stringify(tournament));
+    }
+    this.activeTournamentCache = tournament;
+    this.notifyActiveTournament();
+
+    if (this.isFirebaseReady && this.firestore) {
+      const docRef = doc(this.firestore, "active_tournament", "current");
+      if (tournament === null) {
+        await deleteDoc(docRef);
+      } else {
+        const serialized = serializeTournament(tournament);
+        await setDoc(docRef, serialized);
+      }
+    }
+  }
+
+  // --- Match Setup CRUD Operations ---
+
+  getLocalMatchSetup() {
+    const saved = localStorage.getItem(STORAGE_KEYS.MATCH_SETUP);
+    if (saved) return JSON.parse(saved);
+    
+    // Fallback to separate keys if they exist
+    const selected = JSON.parse(localStorage.getItem("horseshoe_match_setup_selected") || "[]");
+    const teams = JSON.parse(localStorage.getItem("horseshoe_match_setup_teams") || "[]");
+    const generated = localStorage.getItem("horseshoe_match_setup_generated") === "true";
+    
+    return {
+      selectedPlayerIds: selected,
+      generatedTeams: teams,
+      isGenerated: generated
+    };
+  }
+
+  subscribeMatchSetup(onUpdate) {
+    this.matchSetupCallbacks.add(onUpdate);
+    // Notify immediately with current cached object
+    onUpdate(this.matchSetupCache);
+    return () => {
+      this.matchSetupCallbacks.delete(onUpdate);
+    };
+  }
+
+  notifyMatchSetup() {
+    this.matchSetupCallbacks.forEach(cb => cb(this.matchSetupCache));
+  }
+
+  async saveMatchSetup(matchSetup) {
+    // Always update local storage and memory cache immediately for instant offline resilience
+    if (!this.isAnonymousUser()) {
+      localStorage.setItem(STORAGE_KEYS.MATCH_SETUP, JSON.stringify(matchSetup));
+    }
+    this.matchSetupCache = matchSetup;
+    this.notifyMatchSetup();
+
+    if (this.isFirebaseReady && this.firestore) {
+      const docRef = doc(this.firestore, "match_setup", "current");
+      await setDoc(docRef, matchSetup);
     }
   }
 
@@ -452,10 +1021,22 @@ class DatabaseService {
   clearLocalData() {
     localStorage.removeItem(STORAGE_KEYS.PLAYERS);
     localStorage.removeItem(STORAGE_KEYS.GAMES);
+    localStorage.removeItem(STORAGE_KEYS.HISTORY);
+    localStorage.removeItem(STORAGE_KEYS.ACTIVE_TOURNAMENT);
+    localStorage.removeItem(STORAGE_KEYS.MATCH_SETUP);
+    localStorage.removeItem("horseshoe_match_setup_selected");
+    localStorage.removeItem("horseshoe_match_setup_teams");
+    localStorage.removeItem("horseshoe_match_setup_generated");
     this.playersCache = [];
     this.gamesCache = [];
+    this.historyCache = [];
+    this.activeTournamentCache = null;
+    this.matchSetupCache = { selectedPlayerIds: [], generatedTeams: [], isGenerated: false };
     this.notifyPlayers();
     this.notifyGames();
+    this.notifyHistory();
+    this.notifyActiveTournament();
+    this.notifyMatchSetup();
   }
 }
 

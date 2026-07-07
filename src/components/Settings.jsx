@@ -27,10 +27,29 @@ export default function Settings({ players, games, activeTab }) {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const fileInputRef = useRef(null);
 
+  // Authentication states
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authMode, setAuthMode] = useState("login"); // "login" | "register"
+  const [authError, setAuthError] = useState("");
+  const [authSuccess, setAuthSuccess] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+
   // Subscribe to DB sync status changes
   useEffect(() => {
     const unsub = db.subscribeStatus((status) => {
       setSyncInfo(status);
+    });
+    return unsub;
+  }, []);
+
+  // Subscribe to Auth changes
+  useEffect(() => {
+    const unsub = db.subscribeAuth((user) => {
+      setCurrentUser(user);
+      setIsAuthChecking(false);
     });
     return unsub;
   }, []);
@@ -97,7 +116,7 @@ export default function Settings({ players, games, activeTab }) {
       return;
     }
 
-    const success = await db.initializeFirebase(config);
+    const success = await db.initializeFirebase(config, true);
     setIsSaving(false);
     if (success) {
       setSaveSuccess(true);
@@ -110,6 +129,56 @@ export default function Settings({ players, games, activeTab }) {
     if (window.confirm("Are you sure you want to stop syncing with Firebase? The app will return to offline-only LocalStorage mode.")) {
       await db.clearFirebaseConfig();
       setConfigText("");
+      setCurrentUser(null);
+    }
+  };
+
+  // Authentication Handlers
+  const handleAuthSubmit = async (e) => {
+    e.preventDefault();
+    setAuthError("");
+    setAuthSuccess("");
+    setAuthLoading(true);
+
+    try {
+      if (authMode === "register") {
+        await db.registerWithEmail(authEmail, authPassword);
+        setAuthSuccess("Account created successfully! Secured with email auth.");
+      } else {
+        await db.loginWithEmail(authEmail, authPassword);
+        setAuthSuccess("Logged in successfully! Database connection secured.");
+      }
+      setAuthEmail("");
+      setAuthPassword("");
+    } catch (err) {
+      setAuthError(err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (window.confirm("Are you sure you want to sign out? Your session will revert to default anonymous login.")) {
+      try {
+        await db.logoutUser();
+        setAuthSuccess("Logged out. Reverted to anonymous user.");
+      } catch (err) {
+        setAuthError(err.message);
+      }
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setAuthError("");
+    setAuthSuccess("");
+    setAuthLoading(true);
+    try {
+      await db.loginWithGoogle();
+      setAuthSuccess("Signed in with Google account successfully!");
+    } catch (err) {
+      setAuthError(err.message);
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -512,6 +581,130 @@ export default function Settings({ players, games, activeTab }) {
           )}
         </form>
 
+        {db.getFirebaseConfig() && (
+          <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid var(--border-color)" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: "700", display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+              🔒 Cloud Database Security & Auth
+            </h3>
+            {isAuthChecking ? (
+              <div style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
+                Checking Auth Status...
+              </div>
+            ) : (
+              currentUser && currentUser.email ? (
+                /* Secure email sign-in status */
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <div style={{ 
+                    padding: "12px", 
+                    background: "var(--success-glow)", 
+                    border: "1px solid rgba(16, 185, 129, 0.3)", 
+                    borderRadius: "var(--radius-sm)",
+                    fontSize: "14px",
+                    color: "var(--text-primary)"
+                  }}>
+                    Database writes are secured under user: <strong>{currentUser.email}</strong>
+                  </div>
+                </div>
+              ) : (
+                /* Anonymous or Signed Out status: show login/register/Google forms */
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <div style={{ 
+                    padding: "12px", 
+                    background: "var(--accent-glow)", 
+                    border: "1px solid rgba(99, 102, 241, 0.3)", 
+                    borderRadius: "var(--radius-sm)",
+                    fontSize: "13px",
+                    color: "var(--text-secondary)",
+                    lineHeight: "1.5"
+                  }}>
+                    Database is currently running in <strong>Anonymous Access Mode</strong>. 
+                    To secure write access and prevent unauthorized modifications, sign up for a secure account.
+                  </div>
+
+                  {/* Auth forms toggler */}
+                  <div style={{ display: "flex", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px", gap: "8px" }}>
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{
+                        padding: "6px 12px",
+                        fontSize: "13px",
+                        background: authMode === "login" ? "var(--accent-color)" : "transparent",
+                        color: authMode === "login" ? "#ffffff" : "var(--text-secondary)",
+                        borderColor: "transparent"
+                      }}
+                      onClick={() => { setAuthMode("login"); setAuthError(""); setAuthSuccess(""); }}
+                    >
+                      Sign In
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{
+                        padding: "6px 12px",
+                        fontSize: "13px",
+                        background: authMode === "register" ? "var(--accent-color)" : "transparent",
+                        color: authMode === "register" ? "#ffffff" : "var(--text-secondary)",
+                        borderColor: "transparent"
+                      }}
+                      onClick={() => { setAuthMode("register"); setAuthError(""); setAuthSuccess(""); }}
+                    >
+                      Register Secure Account
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleAuthSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <div className="form-group" style={{ marginBottom: "0px" }}>
+                      <label className="form-label" style={{ fontSize: "12px", marginBottom: "4px" }}>Email Address</label>
+                      <input 
+                        type="email" 
+                        className="form-input" 
+                        value={authEmail} 
+                        onChange={(e) => setAuthEmail(e.target.value)} 
+                        placeholder="coordinator@example.com" 
+                        required 
+                      />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: "0px" }}>
+                      <label className="form-label" style={{ fontSize: "12px", marginBottom: "4px" }}>Password</label>
+                      <input 
+                        type="password" 
+                        className="form-input" 
+                        value={authPassword} 
+                        onChange={(e) => setAuthPassword(e.target.value)} 
+                        placeholder="••••••••" 
+                        minLength={6}
+                        required 
+                      />
+                    </div>
+
+                    {authError && (
+                      <div style={{ color: "var(--danger-color)", fontSize: "12px", fontWeight: "500", marginTop: "4px" }}>
+                        ⚠️ {authError}
+                      </div>
+                    )}
+
+                    {authSuccess && (
+                      <div style={{ color: "var(--success-color)", fontSize: "12px", fontWeight: "500", marginTop: "4px" }}>
+                        ✅ {authSuccess}
+                      </div>
+                    )}
+
+                    <button 
+                      type="submit" 
+                      className="btn btn-primary"
+                      disabled={authLoading}
+                      style={{ marginTop: "8px" }}
+                    >
+                      {authLoading ? "Processing..." : (authMode === "login" ? "Sign In" : "Register Account")}
+                    </button>
+                  </form>
+                </div>
+              )
+            )}
+          </div>
+        )}
+
         <div style={{ 
           marginTop: "24px", 
           padding: "16px", 
@@ -527,7 +720,27 @@ export default function Settings({ players, games, activeTab }) {
             <li>Go to the <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" style={{ color: "var(--accent-color)", textDecoration: "underline" }}>Firebase Console</a>.</li>
             <li>Create a new project named <code>horseshoe-tournament</code>.</li>
             <li>Add a **Web App** project resource, and copy the config object generated there.</li>
+            <li>In Firebase console, enable **Email/Password sign-in** under **Build &rarr; Authentication &rarr; Sign-in method**.</li>
             <li>In Firebase Database settings, click **Create Database** under Cloud Firestore, choose **Test Mode**, and select a server region close to you.</li>
+            <li>Configure your **Firestore Security Rules** to restrict access to authenticated users:
+              <pre style={{ 
+                background: "var(--bg-secondary)", 
+                padding: "8px", 
+                borderRadius: "4px", 
+                fontSize: "11px", 
+                marginTop: "6px",
+                fontFamily: "monospace",
+                border: "1px solid var(--border-color)",
+                overflowX: "auto"
+              }}>{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}`}</pre>
+            </li>
           </ol>
         </div>
       </div>

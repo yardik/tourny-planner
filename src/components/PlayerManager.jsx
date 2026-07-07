@@ -2,7 +2,7 @@ import { useState } from "react";
 import db from "../services/db";
 import { UserPlus, Edit2, Trash2, Trophy, Activity, AlertCircle } from "lucide-react";
 
-export default function PlayerManager({ players, games }) {
+export default function PlayerManager({ players, games, isAnonymous }) {
   const [name, setName] = useState("");
   const [rank, setRank] = useState("A");
   const [gender, setGender] = useState("Male");
@@ -157,103 +157,115 @@ export default function PlayerManager({ players, games }) {
   const duplicateNames = getDuplicateNames();
 
   return (
-    <div className="dashboard-grid">
+    <div className={isAnonymous ? "" : "dashboard-grid"}>
       {/* Left Column: Player Entry/Edit Form */}
-      <div>
-        <div className="glass-panel" style={{ marginBottom: "24px" }}>
-          <h2 style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
-            {editingPlayer ? <Edit2 size={20} /> : <UserPlus size={20} />}
-            {editingPlayer ? "Edit Player Details" : "Register New Player"}
-          </h2>
+      {!isAnonymous && (
+        <div>
+          <div className="glass-panel" style={{ marginBottom: "24px" }}>
+            <h2 style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+              {editingPlayer ? <Edit2 size={20} /> : <UserPlus size={20} />}
+              {editingPlayer ? "Edit Player Details" : "Register New Player"}
+            </h2>
 
-          <form onSubmit={editingPlayer ? handleSaveEdit : handleAddPlayer}>
-            <div className="form-group">
-              <label className="form-label">Full Name</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="e.g. John Doe"
-                value={editingPlayer ? editName : name}
-                onChange={(e) => editingPlayer ? setEditName(e.target.value) : setName(e.target.value)}
-                maxLength={30}
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Skill Rank Group</label>
-              <select
-                className="form-select"
-                value={editingPlayer ? editRank : rank}
-                onChange={(e) => editingPlayer ? setEditRank(e.target.value) : setRank(e.target.value)}
-              >
-                <option value="A">Rank A (Pro/Advanced)</option>
-                <option value="B">Rank B (Competitive)</option>
-                <option value="C">Rank C (Intermediate)</option>
-                <option value="D">Rank D (Casual/Novice)</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Gender</label>
-              <select
-                className="form-select"
-                value={editingPlayer ? editGender : gender}
-                onChange={(e) => editingPlayer ? setEditGender(e.target.value) : setGender(e.target.value)}
-              >
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-              </select>
-            </div>
-
-            {errorMsg && (
-              <div style={{ 
-                color: "var(--danger-color)", 
-                backgroundColor: "var(--danger-glow)", 
-                border: "1px solid rgba(239, 68, 68, 0.2)",
-                padding: "10px", 
-                borderRadius: "var(--radius-sm)", 
-                fontSize: "14px",
-                marginBottom: "16px",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px"
-              }}>
-                <AlertCircle size={16} />
-                {errorMsg}
+            <form onSubmit={editingPlayer ? handleSaveEdit : handleAddPlayer}>
+              <div className="form-group">
+                <label className="form-label">Full Name</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. John Doe"
+                  value={editingPlayer ? editName : name}
+                  onChange={(e) => editingPlayer ? setEditName(e.target.value) : setName(e.target.value)}
+                  maxLength={30}
+                  required
+                />
               </div>
-            )}
 
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                {editingPlayer ? "Save Changes" : "Register Player"}
-              </button>
-              {editingPlayer && (
-                <button type="button" className="btn btn-secondary" onClick={() => setEditingPlayer(null)}>
-                  Cancel
-                </button>
+              <div className="form-group">
+                <label className="form-label">Skill Rank Group</label>
+                <select
+                  className="form-select"
+                  value={editingPlayer ? editRank : rank}
+                  onChange={(e) => editingPlayer ? setEditRank(e.target.value) : setRank(e.target.value)}
+                >
+                  <option value="A">Rank A (Pro/Advanced)</option>
+                  <option value="B">Rank B (Upper Medium)</option>
+                  <option value="C">Rank C (Lower Medium)</option>
+                  <option value="D">Rank D (Beginner/Novice)</option>
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: "20px" }}>
+                <label className="form-label">Gender (for Seed Balance)</label>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button
+                    type="button"
+                    className={`btn ${ (editingPlayer ? editGender : gender) === 'Male' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ flex: 1 }}
+                    onClick={() => editingPlayer ? setEditGender('Male') : setGender('Male')}
+                  >
+                    Male
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${ (editingPlayer ? editGender : gender) === 'Female' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ flex: 1 }}
+                    onClick={() => editingPlayer ? setEditGender('Female') : setGender('Female')}
+                  >
+                    Female
+                  </button>
+                </div>
+              </div>
+
+              {errorMsg && (
+                <div style={{ 
+                  color: "var(--danger-color)", 
+                  backgroundColor: "var(--danger-glow)", 
+                  border: "1px solid rgba(239, 68, 68, 0.3)", 
+                  padding: "10px", 
+                  borderRadius: "var(--radius-sm)", 
+                  fontSize: "14px",
+                  marginBottom: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px"
+                }}>
+                  <AlertCircle size={16} />
+                  {errorMsg}
+                </div>
               )}
-            </div>
-          </form>
-        </div>
 
-        {/* Small stats card */}
-        <div className="glass-panel" style={{ backgroundColor: "var(--accent-light)" }}>
-          <h3 style={{ fontSize: "16px", fontWeight: "600", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
-            <Activity size={18} /> Tournament Quick Stats
-          </h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div style={{ padding: "10px", background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>
-              <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Total Players</div>
-              <div style={{ fontSize: "20px", fontWeight: "700", color: "var(--accent-color)" }}>{players.length}</div>
-            </div>
-            <div style={{ padding: "10px", background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>
-              <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Games Logged</div>
-              <div style={{ fontSize: "20px", fontWeight: "700", color: "var(--success-color)" }}>{games.filter(g => !g.id.startsWith("tg_2_")).length}</div>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                  {editingPlayer ? "Save Changes" : "Register Player"}
+                </button>
+                {editingPlayer && (
+                  <button type="button" className="btn btn-secondary" onClick={() => setEditingPlayer(null)}>
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+
+          {/* Small stats card */}
+          <div className="glass-panel" style={{ backgroundColor: "var(--accent-light)" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: "600", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <Activity size={18} /> Tournament Quick Stats
+            </h3>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div style={{ padding: "10px", background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>
+                <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Total Players</div>
+                <div style={{ fontSize: "20px", fontWeight: "700", color: "var(--accent-color)" }}>{players.length}</div>
+              </div>
+              <div style={{ padding: "10px", background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>
+                <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Games Logged</div>
+                <div style={{ fontSize: "20px", fontWeight: "700", color: "var(--success-color)" }}>{games.filter(g => !g.id.startsWith("tg_2_")).length}</div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Right Column: Players List & Standings */}
       <div className="glass-panel">
@@ -320,7 +332,7 @@ export default function PlayerManager({ players, games }) {
                   <th style={{ textAlign: "center" }}>Win %</th>
                   <th style={{ textAlign: "center" }}>Pts For</th>
                   <th style={{ textAlign: "center" }}>Pts Against</th>
-                  <th style={{ width: "80px", textAlign: "right" }}>Actions</th>
+                  {!isAnonymous && <th style={{ width: "80px", textAlign: "right" }}>Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -331,10 +343,13 @@ export default function PlayerManager({ players, games }) {
                         <span>{player.name}</span>
                         <span 
                           style={{ 
-                            fontSize: "12px", 
-                            color: player.gender === "Female" ? "#ec4899" : "#3b82f6", 
-                            fontWeight: "bold",
-                            opacity: 0.8
+                            fontSize: "20px", 
+                            color: player.gender === "Female" ? "#ec4899" : "#1d4ed8", 
+                            fontWeight: "900",
+                            opacity: 1,
+                            marginLeft: "2px",
+                            display: "inline-block",
+                            verticalAlign: "middle"
                           }}
                           title={player.gender || "Male"}
                         >
@@ -368,24 +383,26 @@ export default function PlayerManager({ players, games }) {
                     <td style={{ textAlign: "center", color: "var(--text-secondary)" }}>
                       {player.stats.pointsAgainst}
                     </td>
-                    <td style={{ textAlign: "right" }}>
-                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "4px" }}>
-                        <button
-                          className="btn-icon-only"
-                          title="Edit Player"
-                          onClick={() => startEdit(player)}
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          className="btn-icon-only danger"
-                          title="Delete Player"
-                          onClick={() => handleDeletePlayer(player.id, player.name)}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
+                    {!isAnonymous && (
+                      <td style={{ textAlign: "right" }}>
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "4px" }}>
+                          <button
+                            className="btn-icon-only"
+                            title="Edit Player"
+                            onClick={() => startEdit(player)}
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button
+                            className="btn-icon-only danger"
+                            title="Delete Player"
+                            onClick={() => handleDeletePlayer(player.id, player.name)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
