@@ -151,9 +151,14 @@ function App() {
       <header className="app-header">
         <div className="header-logo">
           <img 
-            src="/logo-banner.png" 
+            src="/logo-banner-light.png" 
+            className="logo-light" 
             alt="Homestead Horseshoes" 
-            style={{ height: "42px", display: "block", objectFit: "contain" }} 
+          />
+          <img 
+            src="/logo-banner-dark.png" 
+            className="logo-dark" 
+            alt="Homestead Horseshoes" 
           />
         </div>
 

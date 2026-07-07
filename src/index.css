@@ -133,17 +133,24 @@ body {
   gap: 12px;
 }
 
-.header-logo svg {
-  color: var(--accent-color);
+.header-logo .logo-light {
+  display: block;
+  height: 42px;
+  object-fit: contain;
 }
 
-.header-logo h1 {
-  font-size: 24px;
-  font-weight: 700;
-  background: linear-gradient(135deg, var(--accent-color), #ec4899);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  letter-spacing: -0.5px;
+.header-logo .logo-dark {
+  display: none;
+  height: 42px;
+  object-fit: contain;
+}
+
+.dark .header-logo .logo-light {
+  display: none;
+}
+
+.dark .header-logo .logo-dark {
+  display: block;
 }
 
 /* Navigation tabs */
