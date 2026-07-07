@@ -16,9 +16,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons.svg', 'icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'Horseshoe Tournament Planner',
-        short_name: 'Horseshoes',
-        description: 'A local and cloud-synced tournament planner for horseshoe tournaments.',
+        name: 'Tourny Tourny Tourny',
+        short_name: 'Tourny Tourny Tourny',
+        description: 'A local and cloud-synced tournament planner.',
         theme_color: '#0f172a',
         background_color: '#0f172a',
         display: 'standalone',

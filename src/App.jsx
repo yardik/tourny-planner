@@ -151,7 +151,7 @@ function App() {
       <header className="app-header">
         <div className="header-logo">
           <Trophy size={28} />
-          <h1>Horseshoe Tournament</h1>
+          <h1>Tourny Tourny Tourny</h1>
         </div>
 
         {/* Header Sync Status Pill & Toggle Switch */}
