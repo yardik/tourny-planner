@@ -294,6 +294,16 @@ function App() {
                   </span>
                 )}
               </div>
+
+              {/* Settings Gear Button */}
+              <button
+                type="button"
+                onClick={() => setActiveTab(activeTab === "settings" ? "players" : "settings")}
+                className={`header-settings-btn ${activeTab === "settings" ? "active" : ""}`}
+                title="Settings"
+              >
+                <SettingsIcon size={16} />
+              </button>
             </>
           )}
 
@@ -450,16 +460,7 @@ function App() {
           <History size={18} />
           Tournament History
         </button>
-        {user && !user.isAnonymous && (
-          <button
-            type="button"
-            className={`nav-tab-btn ${activeTab === "settings" ? "active" : ""}`}
-            onClick={() => setActiveTab("settings")}
-          >
-            <SettingsIcon size={18} />
-            Settings
-          </button>
-        )}
+
       </nav>
 
       {/* Tab Content Panels */}
