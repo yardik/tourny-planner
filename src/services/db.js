@@ -707,8 +707,6 @@ class DatabaseService {
             isAdmin: false,
             requestedAt: serverTimestamp()
           });
-          
-          sessionStorage.setItem("just_requested_access", "true");
         }
       }
     } catch (err) {
@@ -830,7 +828,6 @@ class DatabaseService {
   }
 
   async logoutUser() {
-    sessionStorage.removeItem("just_requested_access");
     if (this.auth) {
       await signOut(this.auth);
     }

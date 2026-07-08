@@ -227,7 +227,7 @@ function App() {
   const isAnonymous = !isUserApproved;
   const isAdmin = isUserApproved && userProfile.isAdmin;
   const isPendingOrRejected = user && !user.isAnonymous && (!userProfile || userProfile.status !== "approved");
-  const showBlockedScreen = isPendingOrRejected && sessionStorage.getItem("just_requested_access") !== "true";
+  const showBlockedScreen = isPendingOrRejected;
 
   if (isSigningInWithLink) {
     return (
