@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserProfile() {
+      return get(/databases/$(database)/documents/user_access_requests/$(request.auth.uid)).data;
+    }
+
+    function isApproved() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/user_access_requests/$(request.auth.uid)) &&
+             getUserProfile().status == 'approved';
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/user_access_requests/$(request.auth.uid)) &&
+             getUserProfile().isAdmin == true && 
+             getUserProfile().status == 'approved';
+    }
+
+    // Rules for app data
+    match /players/{playerId} {
+      allow read: if true;
+      allow write: if isApproved();
+    }
+
+    match /games/{gameId} {
+      allow read: if true;
+      allow write: if isApproved();
+    }
+
+    match /tournament_history/{historyId} {
+      allow read: if true;
+      allow write: if isApproved();
+    }
+
+    match /active_tournament/{docId} {
+      allow read: if true;
+      allow write: if isApproved();
+    }
+
+    match /match_setup/{docId} {
+      allow read: if true;
+      allow write: if isApproved();
+    }
+
+    // Rules for access requests
+    match /user_access_requests/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      
+      // Allow users to request access (pending by default) OR allow first user bootstrap
+      allow create: if isAuthenticated() && request.auth.uid == userId && (
+        (request.resource.data.status == 'pending' && request.resource.data.isAdmin == false) ||
+        (!exists(/databases/$(database)/documents/user_access_requests/bootstrap_lock))
+      );
+
+      // Only admins can modify status/admin levels or delete profiles
+      allow update, delete: if isAdmin();
+    }
+
+    // Lock document to safely coordinate bootstrap status
+    match /user_access_requests/bootstrap_lock {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (!exists(/databases/$(database)/documents/user_access_requests/bootstrap_lock));
+      allow update, delete: if isAdmin();
+    }
+  }
+}

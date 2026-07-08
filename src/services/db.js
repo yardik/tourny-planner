@@ -6,13 +6,15 @@ import {
   persistentMultipleTabManager,
   collection, 
   doc,
+  getDoc,
   setDoc,
   updateDoc,
   deleteDoc,
   onSnapshot,
   query,
   orderBy,
-  writeBatch
+  writeBatch,
+  serverTimestamp
 } from "firebase/firestore";
 import { 
   getAuth, 
@@ -668,12 +670,105 @@ class DatabaseService {
     return this.user;
   }
 
+  async checkOrCreateAccessRequest(user) {
+    if (!this.firestore) return;
+    
+    try {
+      const userDocRef = doc(this.firestore, "user_access_requests", user.uid);
+      const userSnap = await getDoc(userDocRef);
+      
+      if (!userSnap.exists()) {
+        const lockDocRef = doc(this.firestore, "user_access_requests", "bootstrap_lock");
+        const lockSnap = await getDoc(lockDocRef);
+        
+        const isFirstUser = !lockSnap.exists();
+        
+        if (isFirstUser) {
+          const batch = writeBatch(this.firestore);
+          batch.set(lockDocRef, { initializedAt: serverTimestamp() });
+          batch.set(userDocRef, {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName || user.email.split("@")[0],
+            status: "approved",
+            isAdmin: true,
+            requestedAt: serverTimestamp()
+          });
+          await batch.commit();
+        } else {
+          await setDoc(userDocRef, {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName || user.email.split("@")[0],
+            status: "pending",
+            isAdmin: false,
+            requestedAt: serverTimestamp()
+          });
+          
+          sessionStorage.setItem("just_requested_access", "true");
+        }
+      }
+    } catch (err) {
+      console.error("Error checking or creating user access request:", err);
+    }
+  }
+
+  subscribeUserAccessRequest(uid, callback) {
+    if (!this.isFirebaseReady || !this.firestore) {
+      return () => {};
+    }
+    const docRef = doc(this.firestore, "user_access_requests", uid);
+    return onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        callback(docSnap.data());
+      } else {
+        callback(null);
+      }
+    }, (err) => {
+      console.error("Error listening to user access request:", err);
+      callback(null);
+    });
+  }
+
+  subscribeAllAccessRequests(callback) {
+    if (!this.isFirebaseReady || !this.firestore) {
+      return () => {};
+    }
+    const q = query(
+      collection(this.firestore, "user_access_requests"),
+      orderBy("requestedAt", "desc")
+    );
+    return onSnapshot(q, (querySnap) => {
+      const requests = [];
+      querySnap.forEach((docSnap) => {
+        if (docSnap.id !== "bootstrap_lock") {
+          requests.push(docSnap.data());
+        }
+      });
+      callback(requests);
+    }, (err) => {
+      console.error("Error listening to all access requests:", err);
+    });
+  }
+
+  async updateAccessRequest(uid, updates) {
+    if (!this.isFirebaseReady || !this.firestore) return;
+    const docRef = doc(this.firestore, "user_access_requests", uid);
+    await updateDoc(docRef, updates);
+  }
+
+  async deleteAccessRequest(uid) {
+    if (!this.isFirebaseReady || !this.firestore) return;
+    const docRef = doc(this.firestore, "user_access_requests", uid);
+    await deleteDoc(docRef);
+  }
+
   async registerWithEmail(email, password) {
     if (!this.isFirebaseReady || !this.auth) {
       throw new Error("Cloud sync is not connected. Connect Firebase first.");
     }
-    // Create new email user credentials
     const credential = await createUserWithEmailAndPassword(this.auth, email, password);
+    await this.checkOrCreateAccessRequest(credential.user);
     this.user = credential.user;
     this.notifyAuth();
     return credential.user;
@@ -684,6 +779,7 @@ class DatabaseService {
       throw new Error("Cloud sync is not connected. Connect Firebase first.");
     }
     const credential = await signInWithEmailAndPassword(this.auth, email, password);
+    await this.checkOrCreateAccessRequest(credential.user);
     this.user = credential.user;
     this.notifyAuth();
     return credential.user;
@@ -695,12 +791,14 @@ class DatabaseService {
     }
     const provider = new GoogleAuthProvider();
     const result = await signInWithPopup(this.auth, provider);
+    await this.checkOrCreateAccessRequest(result.user);
     this.user = result.user;
     this.notifyAuth();
     return result.user;
   }
 
   async logoutUser() {
+    sessionStorage.removeItem("just_requested_access");
     if (this.auth) {
       await signOut(this.auth);
     }

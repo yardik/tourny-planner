@@ -20,8 +20,11 @@ import {
   LogOut,
   User,
   Sun,
-  Moon
+  Moon,
+  Shield
 } from "lucide-react";
+import AuthModal from "./components/AuthModal";
+import UserApprovals from "./components/UserApprovals";
 import "./App.css";
 
 function App() {
@@ -35,9 +38,13 @@ function App() {
   const [syncPreference, setSyncPreference] = useState(db.getSyncPreference());
   const [isSyncingTransition, setIsSyncingTransition] = useState(false);
   const [user, setUser] = useState(db.user);
+  const [userProfile, setUserProfile] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [theme, setTheme] = useState(db.getTheme());
   const initialRedirectDone = useRef(false);
+  const unsubProfileRef = useRef(null);
 
   const handleThemeChange = (newTheme) => {
     setTheme(newTheme);
@@ -132,6 +139,24 @@ function App() {
     // Subscribe to auth changes
     const unsubAuth = db.subscribeAuth((updatedUser) => {
       setUser(updatedUser);
+      
+      // Clean up previous user profile listener
+      if (unsubProfileRef.current) {
+        unsubProfileRef.current();
+        unsubProfileRef.current = null;
+      }
+      
+      if (updatedUser && !updatedUser.isAnonymous) {
+        setIsAuthLoading(true);
+        unsubProfileRef.current = db.subscribeUserAccessRequest(updatedUser.uid, (profile) => {
+          setUserProfile(profile);
+          setIsAuthLoading(false);
+        });
+      } else {
+        setUserProfile(null);
+        setIsAuthLoading(false);
+      }
+
       if (!initialRedirectDone.current) {
         if (!updatedUser || updatedUser.isAnonymous) {
           setActiveTab("brackets");
@@ -149,16 +174,87 @@ function App() {
       unsubActiveTournament();
       unsubMatchSetup();
       unsubAuth();
+      if (unsubProfileRef.current) {
+        unsubProfileRef.current();
+      }
     };
   }, []);
 
-  // Redirect anonymous users away from the Settings tab
+  // Redirect anonymous or non-admin users away from protected tabs
   useEffect(() => {
-    const isAnonymous = !user || user.isAnonymous;
+    const isUserApproved = user && !user.isAnonymous && userProfile && userProfile.status === "approved";
+    const isAnonymous = !isUserApproved;
+    const isAdmin = isUserApproved && userProfile.isAdmin;
+
     if (isAnonymous && activeTab === "settings") {
       setActiveTab("brackets");
     }
-  }, [user, activeTab]);
+    if ((isAnonymous || !isAdmin) && activeTab === "approvals") {
+      setActiveTab("brackets");
+    }
+  }, [user, userProfile, activeTab]);
+
+  const isUserApproved = user && !user.isAnonymous && userProfile && userProfile.status === "approved";
+  const isAnonymous = !isUserApproved;
+  const isAdmin = isUserApproved && userProfile.isAdmin;
+  const isPendingOrRejected = user && !user.isAnonymous && (!userProfile || userProfile.status !== "approved");
+  const showBlockedScreen = isPendingOrRejected && sessionStorage.getItem("just_requested_access") !== "true";
+
+  if (user && !user.isAnonymous && isAuthLoading) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", gap: "16px", background: "var(--bg-primary)", color: "var(--text-primary)" }}>
+        <RefreshCw size={40} className="spin-animation" style={{ color: "var(--accent-color)" }} />
+        <span style={{ fontSize: "14px", fontWeight: "600" }}>Verifying authorization...</span>
+      </div>
+    );
+  }
+
+  if (showBlockedScreen) {
+    const isRejected = userProfile && userProfile.status === "rejected";
+    return (
+      <div style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100vh",
+        background: "var(--bg-primary)",
+        color: "var(--text-primary)",
+        padding: "24px",
+        textAlign: "center"
+      }}>
+        <div className="glass-panel" style={{ maxWidth: "480px", width: "100%", padding: "40px", display: "flex", flexDirection: "column", alignItems: "center", gap: "20px" }}>
+          {isRejected ? (
+            <AlertTriangle size={64} style={{ color: "var(--danger-color)" }} />
+          ) : (
+            <Shield size={64} style={{ color: "var(--gold-color)" }} />
+          )}
+          <h2 style={{ fontSize: "24px", fontWeight: "800", margin: 0 }}>
+            {isRejected ? "Access Request Rejected" : "Access Pending Approval"}
+          </h2>
+          <p style={{ color: "var(--text-secondary)", fontSize: "14px", lineHeight: "1.6", margin: 0 }}>
+            {isRejected
+              ? "Your request for coordinator access has been rejected by an administrator. Contact the administrator if you believe this is a mistake."
+              : "Your request for coordinator access has been received and is currently pending approval by an administrator. Please wait for confirmation."}
+          </p>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "100%", background: "var(--bg-primary)", padding: "12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>
+            <span style={{ fontSize: "11px", color: "var(--text-secondary)", textTransform: "uppercase", fontWeight: "700" }}>Logged In As</span>
+            <span style={{ fontSize: "14px", fontWeight: "600" }}>{user.email}</span>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ width: "100%", marginTop: "12px" }}
+            onClick={handleSignOut}
+          >
+            Go back to public view
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-container">
@@ -221,7 +317,7 @@ function App() {
             <Moon size={14} style={{ color: theme === "dark" ? "var(--accent-color)" : "var(--text-secondary)" }} />
           </div>
 
-          {user && !user.isAnonymous && (
+          {isUserApproved && (
             <>
               {/* Toggle Switch */}
               <div style={{ 
@@ -303,14 +399,16 @@ function App() {
               </div>
 
               {/* Settings Gear Button */}
-              <button
-                type="button"
-                onClick={() => setActiveTab(activeTab === "settings" ? "players" : "settings")}
-                className={`header-settings-btn ${activeTab === "settings" ? "active" : ""}`}
-                title="Settings"
-              >
-                <SettingsIcon size={16} />
-              </button>
+              {isUserApproved && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab(activeTab === "settings" ? "players" : "settings")}
+                  className={`header-settings-btn ${activeTab === "settings" ? "active" : ""}`}
+                  title="Settings"
+                >
+                  <SettingsIcon size={16} />
+                </button>
+              )}
             </>
           )}
 
@@ -380,6 +478,39 @@ function App() {
                       </span>
                     </div>
 
+                    {userProfile && (
+                      <div style={{
+                        fontSize: "11px",
+                        fontWeight: "700",
+                        padding: "3px 8px",
+                        borderRadius: "12px",
+                        textTransform: "uppercase",
+                        textAlign: "center",
+                        background: userProfile.status === "approved" 
+                          ? (userProfile.isAdmin ? "rgba(99, 102, 241, 0.12)" : "rgba(16, 185, 129, 0.12)") 
+                          : userProfile.status === "rejected" 
+                            ? "rgba(239, 68, 68, 0.12)" 
+                            : "rgba(234, 179, 8, 0.12)",
+                        color: userProfile.status === "approved" 
+                          ? (userProfile.isAdmin ? "var(--accent-color)" : "var(--success-color)") 
+                          : userProfile.status === "rejected" 
+                            ? "var(--danger-color)" 
+                            : "var(--gold-color)",
+                        border: userProfile.status === "approved" 
+                          ? (userProfile.isAdmin ? "1px solid rgba(99, 102, 241, 0.3)" : "1px solid rgba(16, 185, 129, 0.3)") 
+                          : userProfile.status === "rejected" 
+                            ? "1px solid rgba(239, 68, 68, 0.3)" 
+                            : "1px solid rgba(234, 179, 8, 0.3)",
+                        alignSelf: "flex-start"
+                      }}>
+                        {userProfile.status === "approved" 
+                          ? (userProfile.isAdmin ? "Admin" : "Coordinator") 
+                          : userProfile.status === "rejected" 
+                            ? "Access Rejected" 
+                            : "Pending Approval"}
+                      </div>
+                    )}
+
                     <div style={{ height: "1px", background: "var(--border-color)", width: "100%" }} />
 
                     <button
@@ -404,7 +535,7 @@ function App() {
             ) : (
               <button
                 type="button"
-                onClick={handleGoogleSignIn}
+                onClick={() => setShowAuthModal(true)}
                 style={{
                   background: "var(--bg-secondary)",
                   border: "1px solid var(--border-color)",
@@ -420,12 +551,6 @@ function App() {
                   transition: "all 0.2s"
                 }}
               >
-                <svg viewBox="0 0 24 24" width="14" height="14" style={{ display: "block" }}>
-                  <path fill="#EA4335" d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.27 0 3.198 2.698 1.24 6.65l4.026 3.115z" />
-                  <path fill="#4285F4" d="M16.04 15.345c-1.077.733-2.455 1.164-4.04 1.164-3.555 0-6.56-2.455-7.636-5.745L2.338 13.88c1.958 3.951 6.03 6.65 10.76 6.65 2.945 0 5.626-1.018 7.643-2.773l-4.7-3.412z" />
-                  <path fill="#FBBC05" d="M4.364 10.764a7.042 7.042 0 0 1 0-2.528L2.338 5.12a11.97 11.97 0 0 0 0 8.76l2.026-3.116z" />
-                  <path fill="#34A853" d="M22.91 12c0-.8-.073-1.573-.208-2.318H12v4.545h6.127c-.264 1.418-1.064 2.618-2.264 3.42l4.7 3.412C20.627 18.982 22.91 15.773 22.91 12z" />
-                </svg>
                 Sign In
               </button>
             )}
@@ -468,23 +593,36 @@ function App() {
           Tournament History
         </button>
 
+        {isAdmin && (
+          <button
+            type="button"
+            className={`nav-tab-btn ${activeTab === "approvals" ? "active" : ""}`}
+            onClick={() => setActiveTab("approvals")}
+          >
+            <Shield size={18} />
+            Approvals
+          </button>
+        )}
       </nav>
 
       {/* Tab Content Panels */}
       <main className="tab-content" style={{ paddingBottom: "40px" }}>
         {activeTab === "players" && (
-          <PlayerManager players={players} games={games} isAnonymous={!user || user.isAnonymous} />
+          <PlayerManager players={players} games={games} isAnonymous={isAnonymous} />
         )}
         {activeTab === "matchmaker" && (
-          <MatchSetup players={players} matchSetup={matchSetup} isAnonymous={!user || user.isAnonymous} onBuildMatch={() => setActiveTab("brackets")} />
+          <MatchSetup players={players} matchSetup={matchSetup} isAnonymous={isAnonymous} onBuildMatch={() => setActiveTab("brackets")} />
         )}
         {activeTab === "brackets" && (
-          <TournamentBrackets players={players} games={games} tournament={tournament} isAnonymous={!user || user.isAnonymous} />
+          <TournamentBrackets players={players} games={games} tournament={tournament} isAnonymous={isAnonymous} />
         )}
         {activeTab === "scores" && (
           <ScoreTracker players={players} games={games} history={history} />
         )}
-        {activeTab === "settings" && user && !user.isAnonymous && (
+        {activeTab === "approvals" && isAdmin && (
+          <UserApprovals user={user} />
+        )}
+        {activeTab === "settings" && isUserApproved && (
           <Settings players={players} games={games} activeTab={activeTab} theme={theme} onThemeChange={handleThemeChange} />
         )}
       </main>
@@ -537,6 +675,7 @@ function App() {
           </div>
         </div>
       )}
+      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
     </div>
   );
 }
