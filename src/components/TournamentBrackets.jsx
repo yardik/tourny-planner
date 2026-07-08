@@ -978,16 +978,16 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
             width: "100%", 
             padding: "8px 10px", 
             background: "var(--bg-secondary)", 
-            border: isScored ? "1px solid rgba(99, 102, 241, 0.25)" : (game.started ? "2px solid var(--success-color)" : "1px solid var(--border-color)"),
+            border: isScored ? "2px solid var(--success-color)" : (game.started ? "2px solid #eab308" : "1px solid var(--border-color)"),
             boxShadow: "var(--shadow-sm)"
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px", textTransform: "uppercase", fontWeight: "700" }}>
             <span>Match {gIdx + 1}</span>
             {isScored ? (
-              <span style={{ color: "var(--success-color)", fontWeight: "600" }}>Scored</span>
+              <span style={{ color: "var(--success-color)", fontWeight: "700", fontSize: "13px" }}>Scored</span>
             ) : (game.started && (
-              <span style={{ color: "var(--success-color)", fontWeight: "600" }}>IN PROGRESS</span>
+              <span style={{ color: "#eab308", fontWeight: "700", fontSize: "13px" }}>IN PROGRESS</span>
             ))}
           </div>
 
@@ -1254,7 +1254,7 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                           padding: "12px 14px",
                           background: "var(--bg-secondary)",
                           borderRadius: "var(--radius-sm)",
-                          border: isScored ? "1px solid rgba(99, 102, 241, 0.2)" : (game.started ? "2px solid var(--success-color)" : "1px solid var(--border-color)"),
+                          border: isScored ? "2px solid var(--success-color)" : (game.started ? "2px solid #eab308" : "1px solid var(--border-color)"),
                           display: "flex",
                           flexDirection: "column",
                           gap: "10px"
@@ -1267,11 +1267,11 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                           </span>
                           
                           {isScored && !isRecording ? (
-                            <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "var(--success-color)", fontWeight: "600" }}>
-                              <CheckCircle size={12} /> Scored
+                            <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: "var(--success-color)", fontWeight: "700" }}>
+                              <CheckCircle size={14} /> Scored
                             </span>
                           ) : (!isScored && game.started && (
-                            <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "var(--success-color)", fontWeight: "600" }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: "#eab308", fontWeight: "700" }}>
                               IN PROGRESS
                             </span>
                           ))}
@@ -1696,23 +1696,23 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                                     padding: "12px 14px",
                                     background: "var(--bg-secondary)",
                                     borderRadius: "var(--radius-sm)",
-                                    border: isScored ? "1px solid rgba(99, 102, 241, 0.2)" : (game.started ? "2px solid var(--success-color)" : "1px solid var(--border-color)"),
+                                    border: isScored ? "2px solid var(--success-color)" : (game.started ? "2px solid #eab308" : "1px solid var(--border-color)"),
                                     display: "flex",
                                     flexDirection: "column",
                                     gap: "10px"
                                   }}
                                 >
-                                  {/* Game Card Header */}
+                                  {/* Game Card Header/Details */}
                                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                     <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-secondary)", textTransform: "uppercase" }}>
                                       Match {gIdx + 1}
                                     </span>
                                     {isScored && !isRecording ? (
-                                      <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "var(--success-color)", fontWeight: "600" }}>
-                                        <CheckCircle size={12} /> Scored
+                                      <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: "var(--success-color)", fontWeight: "700" }}>
+                                        <CheckCircle size={14} /> Scored
                                       </span>
                                     ) : (!isScored && game.started && (
-                                      <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "var(--success-color)", fontWeight: "600" }}>
+                                      <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: "#eab308", fontWeight: "700" }}>
                                         IN PROGRESS
                                       </span>
                                     ))}
