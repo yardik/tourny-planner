@@ -79,7 +79,6 @@ export default function AuthModal({ isOpen, onClose }) {
         zIndex: 2000,
         padding: "16px"
       }}
-      onClick={onClose}
     >
       <div 
         className="glass-panel" 
@@ -92,7 +91,6 @@ export default function AuthModal({ isOpen, onClose }) {
           flexDirection: "column",
           gap: "20px"
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
         <button 

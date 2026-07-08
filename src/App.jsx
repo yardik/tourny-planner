@@ -152,6 +152,9 @@ function App() {
         unsubProfileRef.current = db.subscribeUserAccessRequest(updatedUser.uid, (profile) => {
           setUserProfile(profile);
           setIsAuthLoading(false);
+          if (!profile) {
+            db.checkOrCreateAccessRequest(updatedUser);
+          }
         });
       } else {
         setUserProfile(null);
