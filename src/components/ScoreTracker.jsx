@@ -443,7 +443,9 @@ export default function TournamentHistory({ players, games, history = [] }) {
               </h3>
               
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
-                {Object.entries(selectedEntry.winners).map(([group, team]) => (
+                {Object.entries(selectedEntry.winners)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([group, team]) => (
                   <div 
                     key={group}
                     style={{ 
