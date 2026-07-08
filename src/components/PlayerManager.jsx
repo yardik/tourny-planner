@@ -344,11 +344,10 @@ export default function PlayerManager({ players, games, isAnonymous }) {
                         <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                           <span>{player.name}</span>
                           <span 
-                            className="gender-symbol"
-                            style={{ color: player.gender === "Female" ? "#ec4899" : "#1d4ed8" }}
+                            className={`gender-symbol ${player.gender === "Female" ? "female" : "male"}`}
                             title={player.gender || "Male"}
                           >
-                            {player.gender === "Female" ? "♀" : "♂"}
+                            {player.gender === "Female" ? "F" : "M"}
                           </span>
                           {duplicateNames.includes(player.name.toLowerCase().trim()) && (
                             <AlertCircle 
@@ -412,11 +411,10 @@ export default function PlayerManager({ players, games, isAnonymous }) {
                     <span className="player-name-wrapper">
                       <span className="player-name">{player.name}</span>
                       <span 
-                        className="gender-symbol" 
-                        style={{ color: player.gender === "Female" ? "#ec4899" : "#1d4ed8" }}
+                        className={`gender-symbol ${player.gender === "Female" ? "female" : "male"}`}
                         title={player.gender || "Male"}
                       >
-                        {player.gender === "Female" ? "♀" : "♂"}
+                        {player.gender === "Female" ? "F" : "M"}
                       </span>
                       {duplicateNames.includes(player.name.toLowerCase().trim()) && (
                         <AlertCircle 

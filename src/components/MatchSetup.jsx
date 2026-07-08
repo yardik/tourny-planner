@@ -550,14 +550,11 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                     <div>
                       <span style={{ fontWeight: "600", marginRight: "8px" }}>{player.name}</span>
                       <span 
-                        style={{ 
-                          fontSize: "20px", 
-                          color: player.gender === "Female" ? "#ec4899" : "#1d4ed8", 
-                          fontWeight: "900",
-                          marginRight: "10px" 
-                        }}
+                        className={`gender-symbol ${player.gender === "Female" ? "female" : "male"}`}
+                        title={player.gender || "Male"}
+                        style={{ marginRight: "10px" }}
                       >
-                        {player.gender === "Female" ? "♀" : "♂"}
+                        {player.gender === "Female" ? "F" : "M"}
                       </span>
                       <span className={`rank-badge rank-${player.rank.toLowerCase()}`}>
                         {player.rank}
@@ -621,14 +618,11 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                       <div>
                         <span style={{ fontWeight: "600", marginRight: "8px" }}>{player.name}</span>
                         <span 
-                          style={{ 
-                            fontSize: "20px", 
-                            color: player.gender === "Female" ? "#ec4899" : "#1d4ed8", 
-                            fontWeight: "900",
-                            marginRight: "10px" 
-                          }}
+                          className={`gender-symbol ${player.gender === "Female" ? "female" : "male"}`}
+                          title={player.gender || "Male"}
+                          style={{ marginRight: "10px" }}
                         >
-                          {player.gender === "Female" ? "♀" : "♂"}
+                          {player.gender === "Female" ? "F" : "M"}
                         </span>
                         <span className={`rank-badge rank-${player.rank.toLowerCase()}`}>
                           {player.rank}
@@ -869,15 +863,10 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                               )}
                               <span style={{ fontWeight: "600" }}>{team.p1.name}</span>
                               <span 
-                                style={{ 
-                                  fontSize: "20px", 
-                                  color: team.p1.gender === "Female" ? "#ec4899" : "#1d4ed8", 
-                                  fontWeight: "900",
-                                  display: "inline-block",
-                                  verticalAlign: "middle"
-                                }}
+                                className={`gender-symbol ${team.p1.gender === "Female" ? "female" : "male"}`}
+                                title={team.p1.gender || "Male"}
                               >
-                                {team.p1.gender === "Female" ? "♀" : "♂"}
+                                {team.p1.gender === "Female" ? "F" : "M"}
                               </span>
                             </div>
                             <span className={`rank-badge rank-${team.p1.rank.toLowerCase()}`} style={{ fontSize: "11px" }}>
@@ -953,15 +942,10 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                               )}
                               <span style={{ fontWeight: "600" }}>{team.p2.name}</span>
                               <span 
-                                style={{ 
-                                  fontSize: "20px", 
-                                  color: team.p2.gender === "Female" ? "#ec4899" : "#1d4ed8", 
-                                  fontWeight: "900",
-                                  display: "inline-block",
-                                  verticalAlign: "middle"
-                                }}
+                                className={`gender-symbol ${team.p2.gender === "Female" ? "female" : "male"}`}
+                                title={team.p2.gender || "Male"}
                               >
-                                {team.p2.gender === "Female" ? "♀" : "♂"}
+                                {team.p2.gender === "Female" ? "F" : "M"}
                               </span>
                             </div>
                             <span className={`rank-badge rank-${team.p2.rank.toLowerCase()}`} style={{ fontSize: "11px" }}>

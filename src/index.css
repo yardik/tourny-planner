@@ -616,12 +616,20 @@ body {
 }
 
 .gender-symbol {
-  font-size: 26px;
-  font-weight: 900;
+  font-size: 16px;
+  font-weight: 800;
   display: inline-block;
   vertical-align: middle;
-  margin-left: 4px;
+  margin-left: 6px;
   line-height: 1;
+}
+
+.gender-symbol.female {
+  color: #a855f7; /* Violet/Purple */
+}
+
+.gender-symbol.male {
+  color: #06b6d4; /* Teal */
 }
 
 /* Responsive display toggle classes */
