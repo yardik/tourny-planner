@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import db from "./services/db";
 import PlayerManager from "./components/PlayerManager";
 import ScoreTracker from "./components/ScoreTracker";
@@ -37,6 +37,7 @@ function App() {
   const [user, setUser] = useState(db.user);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [theme, setTheme] = useState(db.getTheme());
+  const initialRedirectDone = useRef(false);
 
   const handleThemeChange = (newTheme) => {
     setTheme(newTheme);
@@ -131,6 +132,12 @@ function App() {
     // Subscribe to auth changes
     const unsubAuth = db.subscribeAuth((updatedUser) => {
       setUser(updatedUser);
+      if (!initialRedirectDone.current) {
+        if (!updatedUser || updatedUser.isAnonymous) {
+          setActiveTab("brackets");
+        }
+        initialRedirectDone.current = true;
+      }
     });
 
     // Clean up subscriptions on unmount
@@ -149,7 +156,7 @@ function App() {
   useEffect(() => {
     const isAnonymous = !user || user.isAnonymous;
     if (isAnonymous && activeTab === "settings") {
-      setActiveTab("players");
+      setActiveTab("brackets");
     }
   }, [user, activeTab]);
 
