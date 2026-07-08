@@ -1170,7 +1170,7 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
           <p className="page-subtitle" style={{ marginBottom: "0" }}>
             {isPlayoffs
               ? "Drawn paper-style playoff brackets with dynamically advancing brackets."
-              : "Score matches and complete all 3 rounds to unlock playoffs."}
+              : (isAnonymous ? "Qualifying starting rounds." : "Score matches and complete all 3 rounds to unlock playoffs.")}
           </p>
         </div>
         {!isAnonymous && (
