@@ -491,17 +491,20 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
   return (
     <div>
       {/* Page Title */}
-      <div style={{ marginBottom: "24px" }}>
-        <h2 className="page-title" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <Users size={24} /> Match Team Builder
-        </h2>
-        <p className="page-subtitle">Select who is playing today and generate fair teams automatically.</p>
-      </div>
+      {!isAnonymous && (
+        <div style={{ marginBottom: "24px" }}>
+          <h2 className="page-title" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <Users size={24} /> Match Team Builder
+          </h2>
+          <p className="page-subtitle">Select who is playing today and generate fair teams automatically.</p>
+        </div>
+      )}
 
       {!isGenerated ? (
-        <div className="dashboard-grid">
+        <div className={isAnonymous ? "" : "dashboard-grid"}>
           {/* Left Column: Available Player Directory */}
-          <div className="glass-panel">
+          {!isAnonymous && (
+            <div className="glass-panel">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
               <h3 style={{ fontSize: "18px", fontWeight: "600" }}>Available Players</h3>
               {availablePlayers.length > 0 && !isAnonymous && (
@@ -575,7 +578,8 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                 ))}
               </div>
             )}
-          </div>
+            </div>
+          )}
 
           {/* Right Column: In-Match Queue */}
           <div className="glass-panel">
