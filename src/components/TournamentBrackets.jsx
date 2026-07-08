@@ -1521,7 +1521,7 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                   style={{ flex: 1, padding: "12px" }}
                 >
                   <Trophy size={18} style={{ color: activePlayoffTab === key ? "var(--gold-color)" : "inherit" }} />
-                  Playoffs Group {key} ({numTeamsInGroup > 0 ? `${numTeamsInGroup} Teams` : "Empty"})
+                  {key} DIVISION Playoffs ({numTeamsInGroup > 0 ? `${numTeamsInGroup} Teams` : "Empty"})
                 </button>
               );
             })}
@@ -1534,7 +1534,7 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
               return (
                 <div className="glass-panel" style={{ textAlign: "center", padding: "40px" }}>
                   <AlertCircle size={40} style={{ color: "var(--text-secondary)", opacity: 0.5, marginBottom: "12px" }} />
-                  <p style={{ fontSize: "15px", color: "var(--text-secondary)" }}>No teams were assigned to Group {activePlayoffTab} based on points.</p>
+                  <p style={{ fontSize: "15px", color: "var(--text-secondary)" }}>No teams were assigned to the {activePlayoffTab} DIVISION based on points.</p>
                 </div>
               );
             }
@@ -1634,7 +1634,7 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                     >
                       <Trophy size={48} style={{ color: "var(--gold-color)", marginBottom: "12px", animation: "spin 5s linear infinite" }} />
                       <h3 style={{ fontSize: "20px", fontWeight: "800", color: "var(--gold-color)", margin: "0 0 6px 0", textTransform: "uppercase", letterSpacing: "1px" }}>
-                        Group {activePlayoffTab} Round Robin Champion!
+                        {activePlayoffTab} DIVISION Round Robin Champion!
                       </h3>
                       <p style={{ fontSize: "16px", fontWeight: "700", color: "var(--text-primary)", margin: 0 }}>
                         🏆 {rrChampion.p1?.name} & {rrChampion.p2?.name} 🏆
@@ -1845,7 +1845,7 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                       <div className="glass-panel" style={{ position: "sticky", top: "24px" }}>
                         <h3 style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "16px", fontWeight: "700", marginBottom: "16px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>
                           <Trophy size={18} style={{ color: "var(--gold-color)" }} />
-                          Playoff Standings (Group {activePlayoffTab})
+                          Playoff Standings ({activePlayoffTab} DIVISION)
                         </h3>
 
                         <div className="table-container">
@@ -1915,7 +1915,7 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                   >
                     <Trophy size={48} style={{ color: "var(--gold-color)", marginBottom: "12px", animation: "spin 5s linear infinite" }} />
                     <h3 style={{ fontSize: "20px", fontWeight: "800", color: "var(--gold-color)", margin: "0 0 6px 0", textTransform: "uppercase", letterSpacing: "1px" }}>
-                      Group {activePlayoffTab} Tournament Champions!
+                      {activePlayoffTab} DIVISION Tournament Champions!
                     </h3>
                     <p style={{ fontSize: "16px", fontWeight: "700", color: "var(--text-primary)", margin: 0 }}>
                       🏆 {playoffWinner.p1?.name} & {playoffWinner.p2?.name} 🏆

@@ -457,7 +457,7 @@ export default function TournamentHistory({ players, games, history = [] }) {
                     }}
                   >
                     <span style={{ fontSize: "10px", textTransform: "uppercase", fontWeight: "800", color: "var(--accent-color)" }}>
-                      Group {group} Winner
+                      {group} DIVISION Winner
                     </span>
                     <span style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)" }}>
                       🏆 {team.p1?.name} & {team.p2?.name}
@@ -535,7 +535,7 @@ export default function TournamentHistory({ players, games, history = [] }) {
                           onClick={() => setActivePlayoffTab(group)}
                           style={{ flex: 1, padding: "8px 12px", fontSize: "13px" }}
                         >
-                          Group {group} ({numTeams} Teams{isRR ? ", RR" : ""})
+                          {group} DIVISION ({numTeams} Teams{isRR ? ", RR" : ""})
                         </button>
                       );
                     })}
@@ -565,7 +565,7 @@ export default function TournamentHistory({ players, games, history = [] }) {
                               }}
                             >
                               <h4 style={{ fontSize: "16px", fontWeight: "800", color: "var(--gold-color)", margin: "0 0 4px 0", textTransform: "uppercase" }}>
-                                Group {activePlayoffTab} Champion
+                                {activePlayoffTab} DIVISION Champion
                               </h4>
                               <p style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", margin: 0 }}>
                                 🏆 {rrChampion.p1?.name} & {rrChampion.p2?.name} 🏆
