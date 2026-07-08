@@ -1,6 +1,6 @@
 import { useState } from "react";
 import db from "../services/db";
-import { UserPlus, Edit2, Trash2, Trophy, Activity, AlertCircle } from "lucide-react";
+import { UserPlus, Edit2, Trash2, Trophy, Activity, AlertCircle, Search } from "lucide-react";
 
 export default function PlayerManager({ players, games, isAnonymous }) {
   const [name, setName] = useState("");
@@ -12,6 +12,7 @@ export default function PlayerManager({ players, games, isAnonymous }) {
   const [editGender, setEditGender] = useState("Male");
   const [errorMsg, setErrorMsg] = useState("");
   const [sortField, setSortField] = useState("rank"); // "rank" | "wins" | "name"
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Calculate stats for a player
   const getPlayerStats = (playerId) => {
@@ -124,10 +125,15 @@ export default function PlayerManager({ players, games, isAnonymous }) {
 
   // Sort players list
   const getSortedPlayers = () => {
-    const list = players.map(p => ({
+    let list = players.map(p => ({
       ...p,
       stats: getPlayerStats(p.id)
     }));
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(p => p.name.toLowerCase().includes(q));
+    }
 
     return list.sort((a, b) => {
       if (sortField === "wins") {
@@ -291,6 +297,40 @@ export default function PlayerManager({ players, games, isAnonymous }) {
           </div>
         </div>
 
+        {/* Search / Filter Input */}
+        <div style={{ marginBottom: "20px", display: "flex", gap: "8px", width: "100%", position: "relative" }}>
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Search players by name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ width: "100%", paddingLeft: "36px", paddingRight: "36px", fontSize: "14px" }}
+          />
+          <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)" }} />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              style={{
+                position: "absolute",
+                right: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                color: "var(--text-secondary)",
+                cursor: "pointer",
+                padding: "4px",
+                fontSize: "14px",
+                lineHeight: 1
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
         {duplicateNames.length > 0 && (
           <div style={{ 
             color: "var(--gold-color)", 
@@ -317,9 +357,25 @@ export default function PlayerManager({ players, games, isAnonymous }) {
 
         {sortedPlayers.length === 0 ? (
           <div className="empty-state">
-            <Trophy size={48} />
-            <p>No players registered yet.</p>
-            <p style={{ fontSize: "13px" }}>Use the form on the left to register players and assign ranks.</p>
+            <Trophy size={48} style={{ color: "var(--text-secondary)", opacity: 0.5, marginBottom: "12px" }} />
+            {players.length === 0 ? (
+              <>
+                <p>No players registered yet.</p>
+                <p style={{ fontSize: "13px" }}>Use the form on the left to register players and assign ranks.</p>
+              </>
+            ) : (
+              <>
+                <p>No players found matching "{searchQuery}"</p>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  style={{ marginTop: "12px", fontSize: "12px", padding: "6px 12px" }}
+                  onClick={() => setSearchQuery("")}
+                >
+                  Clear Search Filter
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <>
