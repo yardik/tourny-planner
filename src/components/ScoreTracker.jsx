@@ -464,9 +464,7 @@ export default function TournamentHistory({ players, games, history = [] }) {
                     <span style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)" }}>
                       🏆 {team.p1?.name} & {team.p2?.name}
                     </span>
-                    <span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
-                      (Rank {team.p1?.rank || "?"} + {team.p2?.rank || "?"})
-                    </span>
+                    {/* Rank sum removed */}
                   </div>
                 ))}
               </div>
@@ -626,9 +624,7 @@ export default function TournamentHistory({ players, games, history = [] }) {
                                               <span style={{ fontWeight: "600", fontSize: "12px" }}>
                                                 {stat.team.p1?.name} & {stat.team.p2?.name}
                                               </span>
-                                              <span style={{ fontSize: "9px", color: "var(--text-secondary)" }}>
-                                                (Rank {stat.team.p1?.rank || "?"} + {stat.team.p2?.rank || "?"})
-                                              </span>
+                                              {/* Rank sum removed */}
                                             </div>
                                           </td>
                                           <td style={{ textAlign: "center" }}>{stat.played}</td>
@@ -781,9 +777,7 @@ export default function TournamentHistory({ players, games, history = [] }) {
                                 <span style={{ fontWeight: "600" }}>
                                   {stat.team.p1?.name} & {stat.team.p2?.name}
                                 </span>
-                                <span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
-                                  (Skill: {stat.team.p1?.rank || "?"} + {stat.team.p2?.rank || "?"})
-                                </span>
+                                {/* Rank sum removed */}
                               </div>
                             </td>
                             <td style={{ textAlign: "center" }}>{stat.played}</td>
