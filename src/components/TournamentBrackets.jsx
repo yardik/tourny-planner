@@ -263,6 +263,42 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
     }
   };
 
+  // Mark a game as started
+  const handleStartGame = async (gameId, isPlayoffs = false, playoffGroup = "", roundIdx = 0, gameIdx = 0) => {
+    try {
+      const updatedTournament = { ...tournament };
+
+      if (isPlayoffs) {
+        const groupBracket = { ...tournament.rankedBrackets[playoffGroup] };
+        const updatedRounds = [...groupBracket.rounds];
+        const game = { ...updatedRounds[roundIdx][gameIdx] };
+
+        game.started = true;
+        updatedRounds[roundIdx][gameIdx] = game;
+
+        updatedTournament.rankedBrackets = {
+          ...tournament.rankedBrackets,
+          [playoffGroup]: {
+            ...groupBracket,
+            rounds: updatedRounds
+          }
+        };
+      } else {
+        const updatedRounds = [...tournament.rounds];
+        const game = { ...updatedRounds[roundIdx][gameIdx] };
+
+        game.started = true;
+        updatedRounds[roundIdx][gameIdx] = game;
+        updatedTournament.rounds = updatedRounds;
+      }
+
+      await db.saveActiveTournament(updatedTournament);
+    } catch (err) {
+      console.error("Failed to start game:", err);
+      alert("Failed to start game: " + err.message);
+    }
+  };
+
   // Record a score for a game
   const handleRecordScore = (roundIdx, gameIdx, isPlayoffs = false, playoffGroup = "") => {
     const game = isPlayoffs 
@@ -942,13 +978,17 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
             width: "100%", 
             padding: "8px 10px", 
             background: "var(--bg-secondary)", 
-            border: isScored ? "1px solid rgba(99, 102, 241, 0.25)" : "1px solid var(--border-color)",
+            border: isScored ? "1px solid rgba(99, 102, 241, 0.25)" : (game.started ? "2px solid var(--success-color)" : "1px solid var(--border-color)"),
             boxShadow: "var(--shadow-sm)"
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px", textTransform: "uppercase", fontWeight: "700" }}>
             <span>Match {gIdx + 1}</span>
-            {isScored && <span style={{ color: "var(--success-color)", fontWeight: "600" }}>Scored</span>}
+            {isScored ? (
+              <span style={{ color: "var(--success-color)", fontWeight: "600" }}>Scored</span>
+            ) : (game.started && (
+              <span style={{ color: "var(--success-color)", fontWeight: "600" }}>Started</span>
+            ))}
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -1099,6 +1139,16 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
           ) : (
             team1 && team2 && (
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "4px" }}>
+                {!isScored && !game.started && !isAnonymous && (
+                  <button 
+                    type="button" 
+                    className="btn btn-primary" 
+                    style={{ padding: "3px 8px", fontSize: "11px", backgroundColor: "var(--success-color)", borderColor: "var(--success-color)", color: "#ffffff", marginRight: "6px" }}
+                    onClick={() => handleStartGame(game.id, true, activePlayoffTab, rIdx, gIdx)}
+                  >
+                    Start
+                  </button>
+                )}
                 <button 
                   type="button" 
                   className="btn btn-secondary" 
@@ -1204,7 +1254,7 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                           padding: "12px 14px",
                           background: "var(--bg-secondary)",
                           borderRadius: "var(--radius-sm)",
-                          border: isScored ? "1px solid rgba(99, 102, 241, 0.2)" : "1px solid var(--border-color)",
+                          border: isScored ? "1px solid rgba(99, 102, 241, 0.2)" : (game.started ? "2px solid var(--success-color)" : "1px solid var(--border-color)"),
                           display: "flex",
                           flexDirection: "column",
                           gap: "10px"
@@ -1216,11 +1266,15 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                             Match {gIdx + 1}
                           </span>
                           
-                          {isScored && !isRecording && (
+                          {isScored && !isRecording ? (
                             <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "var(--success-color)", fontWeight: "600" }}>
                               <CheckCircle size={12} /> Scored
                             </span>
-                          )}
+                          ) : (!isScored && game.started && (
+                            <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "var(--success-color)", fontWeight: "600" }}>
+                              Started
+                            </span>
+                          ))}
                         </div>
 
                         {/* Opponents List */}
@@ -1356,6 +1410,16 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                           </form>
                         ) : (
                           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "4px" }}>
+                            {!isScored && !game.started && !isAnonymous && (
+                              <button 
+                                type="button" 
+                                className="btn btn-primary" 
+                                style={{ padding: "5px 12px", fontSize: "12px", backgroundColor: "var(--success-color)", borderColor: "var(--success-color)", color: "#ffffff", marginRight: "8px" }}
+                                onClick={() => handleStartGame(game.id, false, "", rIdx, gIdx)}
+                              >
+                                Start
+                              </button>
+                            )}
                             <button 
                               type="button" 
                               className="btn btn-secondary" 
@@ -1632,7 +1696,7 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                                     padding: "12px 14px",
                                     background: "var(--bg-secondary)",
                                     borderRadius: "var(--radius-sm)",
-                                    border: isScored ? "1px solid rgba(99, 102, 241, 0.2)" : "1px solid var(--border-color)",
+                                    border: isScored ? "1px solid rgba(99, 102, 241, 0.2)" : (game.started ? "2px solid var(--success-color)" : "1px solid var(--border-color)"),
                                     display: "flex",
                                     flexDirection: "column",
                                     gap: "10px"
@@ -1643,11 +1707,15 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                                     <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-secondary)", textTransform: "uppercase" }}>
                                       Match {gIdx + 1}
                                     </span>
-                                    {isScored && !isRecording && (
+                                    {isScored && !isRecording ? (
                                       <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "var(--success-color)", fontWeight: "600" }}>
                                         <CheckCircle size={12} /> Scored
                                       </span>
-                                    )}
+                                    ) : (!isScored && game.started && (
+                                      <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "var(--success-color)", fontWeight: "600" }}>
+                                        Started
+                                      </span>
+                                    ))}
                                   </div>
 
                                   {/* Opponents Stack */}
@@ -1783,6 +1851,16 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                                     </form>
                                   ) : (
                                     <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "4px" }}>
+                                      {!isScored && !game.started && !isAnonymous && (
+                                        <button 
+                                          type="button" 
+                                          className="btn btn-primary" 
+                                          style={{ padding: "5px 12px", fontSize: "12px", backgroundColor: "var(--success-color)", borderColor: "var(--success-color)", color: "#ffffff", marginRight: "8px" }}
+                                          onClick={() => handleStartGame(game.id, true, activePlayoffTab, rIdx, gIdx)}
+                                        >
+                                          Start
+                                        </button>
+                                      )}
                                       <button 
                                         type="button" 
                                         className="btn btn-secondary" 
