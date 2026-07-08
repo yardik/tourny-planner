@@ -556,9 +556,11 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                       >
                         {player.gender === "Female" ? "F" : "M"}
                       </span>
-                      <span className={`rank-badge rank-${player.rank.toLowerCase()}`}>
-                        {player.rank}
-                      </span>
+                      {!isAnonymous && (
+                        <span className={`rank-badge rank-${player.rank.toLowerCase()}`}>
+                          {player.rank}
+                        </span>
+                      )}
                     </div>
                     {!isAnonymous && (
                       <button
@@ -624,9 +626,11 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                         >
                           {player.gender === "Female" ? "F" : "M"}
                         </span>
-                        <span className={`rank-badge rank-${player.rank.toLowerCase()}`}>
-                          {player.rank}
-                        </span>
+                        {!isAnonymous && (
+                          <span className={`rank-badge rank-${player.rank.toLowerCase()}`}>
+                            {player.rank}
+                          </span>
+                        )}
                       </div>
                       {!isAnonymous && (
                         <button
@@ -869,9 +873,11 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                                 {team.p1.gender === "Female" ? "F" : "M"}
                               </span>
                             </div>
-                            <span className={`rank-badge rank-${team.p1.rank.toLowerCase()}`} style={{ fontSize: "11px" }}>
-                              {team.p1.rank}
-                            </span>
+                            {!isAnonymous && (
+                              <span className={`rank-badge rank-${team.p1.rank.toLowerCase()}`} style={{ fontSize: "11px" }}>
+                                {team.p1.rank}
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: "28px" }}>
@@ -948,9 +954,11 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                                 {team.p2.gender === "Female" ? "F" : "M"}
                               </span>
                             </div>
-                            <span className={`rank-badge rank-${team.p2.rank.toLowerCase()}`} style={{ fontSize: "11px" }}>
-                              {team.p2.rank}
-                            </span>
+                            {!isAnonymous && (
+                              <span className={`rank-badge rank-${team.p2.rank.toLowerCase()}`} style={{ fontSize: "11px" }}>
+                                {team.p2.rank}
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: "28px" }}>

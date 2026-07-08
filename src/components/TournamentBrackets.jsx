@@ -1010,20 +1010,14 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                     <span style={{ fontSize: "12px", fontWeight: t1Wins ? "700" : "500", color: t1Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>
                       {team1.p1?.name || "Empty Slot"}
                     </span>
-                    {team1.p1?.rank && (
-                      <span className={`rank-badge rank-${team1.p1.rank.toLowerCase()}`} style={{ fontSize: "8px", padding: "1px 3px", minWidth: "14px", height: "14px" }}>
-                        {team1.p1.rank}
-                      </span>
-                    )}
+                    {/* Rank Badge Removed */}
                   </div>
                   {team1.p2 && (
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                       <span style={{ fontSize: "12px", fontWeight: t1Wins ? "700" : "500", color: t1Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>
                         {team1.p2.name}
                       </span>
-                      <span className={`rank-badge rank-${team1.p2.rank.toLowerCase()}`} style={{ fontSize: "8px", padding: "1px 3px", minWidth: "14px", height: "14px" }}>
-                        {team1.p2.rank}
-                      </span>
+                      {/* Rank Badge Removed */}
                     </div>
                   )}
                 </div>
@@ -1063,20 +1057,14 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                     <span style={{ fontSize: "12px", fontWeight: t2Wins ? "700" : "500", color: t2Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>
                       {team2.p1?.name || "Empty Slot"}
                     </span>
-                    {team2.p1?.rank && (
-                      <span className={`rank-badge rank-${team2.p1.rank.toLowerCase()}`} style={{ fontSize: "8px", padding: "1px 3px", minWidth: "14px", height: "14px" }}>
-                        {team2.p1.rank}
-                      </span>
-                    )}
+                    {/* Rank Badge Removed */}
                   </div>
                   {team2.p2 && (
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                       <span style={{ fontSize: "12px", fontWeight: t2Wins ? "700" : "500", color: t2Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>
                         {team2.p2.name}
                       </span>
-                      <span className={`rank-badge rank-${team2.p2.rank.toLowerCase()}`} style={{ fontSize: "8px", padding: "1px 3px", minWidth: "14px", height: "14px" }}>
-                        {team2.p2.rank}
-                      </span>
+                      {/* Rank Badge Removed */}
                     </div>
                   )}
                 </div>
@@ -1294,18 +1282,12 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t1Wins ? "700" : "500" }}>
                                 <span style={{ color: t1Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team1.p1?.name || "Empty Slot"}</span>
-                                {team1.p1?.rank && (
-                                  <span className={`rank-badge rank-${team1.p1.rank.toLowerCase()}`} style={{ fontSize: "10px", padding: "1px 4px", minWidth: "18px", height: "18px" }}>
-                                    {team1.p1.rank}
-                                  </span>
-                                )}
+                                {/* Rank Badge Removed */}
                               </div>
                               {team1.p2 && (
                                 <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t1Wins ? "700" : "500" }}>
                                   <span style={{ color: t1Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team1.p2.name}</span>
-                                  <span className={`rank-badge rank-${team1.p2.rank.toLowerCase()}`} style={{ fontSize: "10px", padding: "1px 4px", minWidth: "18px", height: "18px" }}>
-                                    {team1.p2.rank}
-                                  </span>
+                                  {/* Rank Badge Removed */}
                                 </div>
                               )}
                             </div>
@@ -1338,18 +1320,12 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t2Wins ? "700" : "500" }}>
                                 <span style={{ color: t2Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team2.p1?.name || "Empty Slot"}</span>
-                                {team2.p1?.rank && (
-                                  <span className={`rank-badge rank-${team2.p1.rank.toLowerCase()}`} style={{ fontSize: "10px", padding: "1px 4px", minWidth: "18px", height: "18px" }}>
-                                    {team2.p1.rank}
-                                  </span>
-                                )}
+                                {/* Rank Badge Removed */}
                               </div>
                               {team2.p2 && (
                                 <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t2Wins ? "700" : "500" }}>
                                   <span style={{ color: t2Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team2.p2.name}</span>
-                                  <span className={`rank-badge rank-${team2.p2.rank.toLowerCase()}`} style={{ fontSize: "10px", padding: "1px 4px", minWidth: "18px", height: "18px" }}>
-                                    {team2.p2.rank}
-                                  </span>
+                                  {/* Rank Badge Removed */}
                                 </div>
                               )}
                             </div>
@@ -1735,18 +1711,10 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                                       <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                                         <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t1Wins ? "700" : "500" }}>
                                           <span style={{ color: t1Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team1.p1?.name || "Empty Slot"}</span>
-                                          {team1.p1?.rank && (
-                                            <span className={`rank-badge rank-${team1.p1.rank.toLowerCase()}`} style={{ fontSize: "10px", padding: "1px 4px", minWidth: "18px", height: "18px" }}>
-                                              {team1.p1.rank}
-                                            </span>
-                                          )}
                                         </div>
                                         {team1.p2 && (
                                           <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t1Wins ? "700" : "500" }}>
                                             <span style={{ color: t1Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team1.p2.name}</span>
-                                            <span className={`rank-badge rank-${team1.p2.rank.toLowerCase()}`} style={{ fontSize: "10px", padding: "1px 4px", minWidth: "18px", height: "18px" }}>
-                                              {team1.p2.rank}
-                                            </span>
                                           </div>
                                         )}
                                       </div>
@@ -1779,18 +1747,10 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                                       <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                                         <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t2Wins ? "700" : "500" }}>
                                           <span style={{ color: t2Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team2.p1?.name || "Empty Slot"}</span>
-                                          {team2.p1?.rank && (
-                                            <span className={`rank-badge rank-${team2.p1.rank.toLowerCase()}`} style={{ fontSize: "10px", padding: "1px 4px", minWidth: "18px", height: "18px" }}>
-                                              {team2.p1.rank}
-                                            </span>
-                                          )}
                                         </div>
                                         {team2.p2 && (
                                           <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t2Wins ? "700" : "500" }}>
                                             <span style={{ color: t2Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team2.p2.name}</span>
-                                            <span className={`rank-badge rank-${team2.p2.rank.toLowerCase()}`} style={{ fontSize: "10px", padding: "1px 4px", minWidth: "18px", height: "18px" }}>
-                                              {team2.p2.rank}
-                                            </span>
                                           </div>
                                         )}
                                       </div>
