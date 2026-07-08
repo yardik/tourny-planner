@@ -987,7 +987,7 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
             {isScored ? (
               <span style={{ color: "var(--success-color)", fontWeight: "600" }}>Scored</span>
             ) : (game.started && (
-              <span style={{ color: "var(--success-color)", fontWeight: "600" }}>Started</span>
+              <span style={{ color: "var(--success-color)", fontWeight: "600" }}>IN PROGRESS</span>
             ))}
           </div>
 
@@ -1272,7 +1272,7 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                             </span>
                           ) : (!isScored && game.started && (
                             <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "var(--success-color)", fontWeight: "600" }}>
-                              Started
+                              IN PROGRESS
                             </span>
                           ))}
                         </div>
@@ -1713,7 +1713,7 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                                       </span>
                                     ) : (!isScored && game.started && (
                                       <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "var(--success-color)", fontWeight: "600" }}>
-                                        Started
+                                        IN PROGRESS
                                       </span>
                                     ))}
                                   </div>
