@@ -625,11 +625,19 @@ body {
 }
 
 .gender-symbol.female {
-  color: #a855f7; /* Violet/Purple */
+  color: #8c531d; /* Warm chocolate brown for light mode */
 }
 
 .gender-symbol.male {
-  color: #06b6d4; /* Teal */
+  color: #64748b; /* Cool slate grey for light mode */
+}
+
+.dark .gender-symbol.female {
+  color: #c68a4c; /* Light tan/brown for dark mode contrast */
+}
+
+.dark .gender-symbol.male {
+  color: #94a3b8; /* Light cool grey for dark mode contrast */
 }
 
 /* Responsive display toggle classes */
