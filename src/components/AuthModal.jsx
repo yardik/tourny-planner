@@ -3,11 +3,12 @@ import { X, Mail, Lock, ShieldAlert } from "lucide-react";
 import db from "../services/db";
 
 export default function AuthModal({ isOpen, onClose }) {
-  const [authMode, setAuthMode] = useState("login"); // "login" | "register"
+  const [authMode, setAuthMode] = useState("login"); // "login" | "passwordless" | "register"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [linkSent, setLinkSent] = useState(false);
 
   if (!isOpen) return null;
 
@@ -19,10 +20,14 @@ export default function AuthModal({ isOpen, onClose }) {
     try {
       if (authMode === "login") {
         await db.loginWithEmail(email, password);
-      } else {
+        onClose();
+      } else if (authMode === "register") {
         await db.registerWithEmail(email, password);
+        onClose();
+      } else if (authMode === "passwordless") {
+        await db.sendEmailSignInLink(email);
+        setLinkSent(true);
       }
-      onClose();
     } catch (err) {
       console.error("Auth error:", err);
       // Friendly messages for Firebase errors
@@ -109,12 +114,18 @@ export default function AuthModal({ isOpen, onClose }) {
         {/* Header */}
         <div style={{ textAlign: "center" }}>
           <h3 style={{ fontSize: "20px", fontWeight: "800", margin: "0 0 6px 0" }}>
-            {authMode === "login" ? "Coordinator Sign In" : "Request Access"}
+            {authMode === "login" 
+              ? "Coordinator Sign In" 
+              : authMode === "passwordless" 
+                ? "Passwordless Sign In" 
+                : "Request Access"}
           </h3>
           <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0 }}>
             {authMode === "login" 
               ? "Access tournament scoring and management tools."
-              : "Register your thrower email to request coordinator access."}
+              : authMode === "passwordless"
+                ? "Sign in securely via a magic link sent to your email."
+                : "Register your thrower email to request coordinator access."}
           </p>
         </div>
 
@@ -156,86 +167,145 @@ export default function AuthModal({ isOpen, onClose }) {
           <div style={{ flex: 1, height: "1px", background: "var(--border-color)" }}></div>
         </div>
 
-        {/* Email Form */}
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <label style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-secondary)" }}>Email Address</label>
-            <div style={{ position: "relative" }}>
-              <input
-                type="email"
-                className="form-control"
-                style={{ paddingLeft: "36px", width: "100%" }}
-                placeholder="thrower@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={isLoading}
-              />
-              <Mail size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)", opacity: 0.7 }} />
-            </div>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <label style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-secondary)" }}>Password</label>
-            <div style={{ position: "relative" }}>
-              <input
-                type="password"
-                className="form-control"
-                style={{ paddingLeft: "36px", width: "100%" }}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                disabled={isLoading}
-              />
-              <Lock size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)", opacity: 0.7 }} />
-            </div>
-          </div>
-
-          {errorMsg && (
-            <div style={{ display: "flex", gap: "6px", alignItems: "center", color: "var(--danger-color)", fontSize: "12px", fontWeight: "500", marginTop: "4px" }}>
-              <ShieldAlert size={14} />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
+        {/* Auth Mode Tabs Switcher */}
+        <div style={{ display: "flex", gap: "4px", background: "var(--bg-primary)", padding: "4px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>
           <button
-            type="submit"
-            className="btn btn-primary"
-            style={{ width: "100%", padding: "10px", marginTop: "6px" }}
-            disabled={isLoading}
+            type="button"
+            style={{
+              flex: 1,
+              padding: "6px 4px",
+              fontSize: "11px",
+              fontWeight: "700",
+              background: authMode === "login" ? "var(--accent-color)" : "transparent",
+              color: authMode === "login" ? "#ffffff" : "var(--text-secondary)",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              transition: "all 0.2s"
+            }}
+            onClick={() => { setAuthMode("login"); setErrorMsg(""); setLinkSent(false); }}
           >
-            {isLoading ? "Processing..." : (authMode === "login" ? "Sign In" : "Submit Access Request")}
+            Password Sign In
           </button>
-        </form>
-
-        {/* Footer Toggle */}
-        <div style={{ textAlign: "center", fontSize: "13px", color: "var(--text-secondary)", marginTop: "4px" }}>
-          {authMode === "login" ? (
-            <>
-              Need coordinator access?{" "}
-              <button 
-                type="button"
-                onClick={() => { setAuthMode("register"); setErrorMsg(""); }}
-                style={{ background: "none", border: "none", color: "var(--accent-color)", fontWeight: "600", cursor: "pointer", padding: 0 }}
-              >
-                Request Access
-              </button>
-            </>
-          ) : (
-            <>
-              Already requested access?{" "}
-              <button 
-                type="button"
-                onClick={() => { setAuthMode("login"); setErrorMsg(""); }}
-                style={{ background: "none", border: "none", color: "var(--accent-color)", fontWeight: "600", cursor: "pointer", padding: 0 }}
-              >
-                Sign In
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            style={{
+              flex: 1,
+              padding: "6px 4px",
+              fontSize: "11px",
+              fontWeight: "700",
+              background: authMode === "passwordless" ? "var(--accent-color)" : "transparent",
+              color: authMode === "passwordless" ? "#ffffff" : "var(--text-secondary)",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              transition: "all 0.2s"
+            }}
+            onClick={() => { setAuthMode("passwordless"); setErrorMsg(""); setLinkSent(false); }}
+          >
+            Passwordless Link
+          </button>
+          <button
+            type="button"
+            style={{
+              flex: 1,
+              padding: "6px 4px",
+              fontSize: "11px",
+              fontWeight: "700",
+              background: authMode === "register" ? "var(--accent-color)" : "transparent",
+              color: authMode === "register" ? "#ffffff" : "var(--text-secondary)",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              transition: "all 0.2s"
+            }}
+            onClick={() => { setAuthMode("register"); setErrorMsg(""); setLinkSent(false); }}
+          >
+            Request Access
+          </button>
         </div>
+
+        {/* Email Form / Success View */}
+        {linkSent ? (
+          <div style={{ textAlign: "center", padding: "10px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+            <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "rgba(16, 185, 129, 0.1)", border: "1px solid rgba(16, 185, 129, 0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--success-color)" }}>
+              <Mail size={24} />
+            </div>
+            <h4 style={{ fontSize: "16px", fontWeight: "700", margin: 0, color: "var(--text-primary)" }}>Magic Link Sent!</h4>
+            <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: "1.5", margin: 0 }}>
+              We've sent a passwordless sign-in link to <strong>{email}</strong>. Please open your email client, look for the Firebase sign-in message, and click the link to finish signing in.
+            </p>
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              style={{ marginTop: "12px", width: "100%", padding: "8px" }}
+              onClick={() => { setLinkSent(false); }}
+            >
+              Send link again / Change email
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <label style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-secondary)" }}>Email Address</label>
+              <div style={{ position: "relative" }}>
+                <input
+                  type="email"
+                  className="form-control"
+                  style={{ paddingLeft: "36px", width: "100%" }}
+                  placeholder="thrower@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={isLoading}
+                />
+                <Mail size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)", opacity: 0.7 }} />
+              </div>
+            </div>
+
+            {authMode !== "passwordless" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <label style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-secondary)" }}>Password</label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    type="password"
+                    className="form-control"
+                    style={{ paddingLeft: "36px", width: "100%" }}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    disabled={isLoading}
+                  />
+                  <Lock size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)", opacity: 0.7 }} />
+                </div>
+              </div>
+            )}
+
+            {errorMsg && (
+              <div style={{ display: "flex", gap: "6px", alignItems: "center", color: "var(--danger-color)", fontSize: "12px", fontWeight: "500", marginTop: "4px" }}>
+                <ShieldAlert size={14} />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{ width: "100%", padding: "10px", marginTop: "6px" }}
+              disabled={isLoading}
+            >
+              {isLoading 
+                ? "Processing..." 
+                : authMode === "login" 
+                  ? "Sign In" 
+                  : authMode === "passwordless" 
+                    ? "Send Sign-In Link" 
+                    : "Submit Access Request"}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

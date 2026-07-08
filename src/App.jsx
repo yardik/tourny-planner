@@ -41,6 +41,7 @@ function App() {
   const [userProfile, setUserProfile] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isSigningInWithLink, setIsSigningInWithLink] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [theme, setTheme] = useState(db.getTheme());
   const initialRedirectDone = useRef(false);
@@ -194,11 +195,48 @@ function App() {
     }
   }, [user, userProfile, activeTab]);
 
+  // Handle Firebase Email Link Sign In on load
+  useEffect(() => {
+    const handleEmailLinkSignIn = async () => {
+      const url = window.location.href;
+      if (db.isEmailSignInLink(url)) {
+        setIsSigningInWithLink(true);
+        try {
+          let email = window.localStorage.getItem("emailForSignIn");
+          if (!email) {
+            email = window.prompt("Please enter your email to complete signing in:");
+          }
+          if (email) {
+            await db.completeEmailLinkSignIn(email, url);
+            window.history.replaceState({}, document.title, window.location.origin);
+          } else {
+            alert("Sign-in cancelled because email address was not provided.");
+          }
+        } catch (err) {
+          console.error("Failed to complete email link sign in:", err);
+          alert("Failed to complete sign in: " + err.message);
+        } finally {
+          setIsSigningInWithLink(false);
+        }
+      }
+    };
+    handleEmailLinkSignIn();
+  }, []);
+
   const isUserApproved = user && !user.isAnonymous && userProfile && userProfile.status === "approved";
   const isAnonymous = !isUserApproved;
   const isAdmin = isUserApproved && userProfile.isAdmin;
   const isPendingOrRejected = user && !user.isAnonymous && (!userProfile || userProfile.status !== "approved");
   const showBlockedScreen = isPendingOrRejected && sessionStorage.getItem("just_requested_access") !== "true";
+
+  if (isSigningInWithLink) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", gap: "16px", background: "var(--bg-primary)", color: "var(--text-primary)" }}>
+        <RefreshCw size={40} className="spin-animation" style={{ color: "var(--accent-color)" }} />
+        <span style={{ fontSize: "14px", fontWeight: "600" }}>Completing passwordless sign-in...</span>
+      </div>
+    );
+  }
 
   if (user && !user.isAnonymous && isAuthLoading) {
     return (

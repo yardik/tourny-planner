@@ -24,7 +24,10 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink
 } from "firebase/auth";
 
 // Check for git-ignored local configuration file
@@ -761,6 +764,35 @@ class DatabaseService {
     if (!this.isFirebaseReady || !this.firestore) return;
     const docRef = doc(this.firestore, "user_access_requests", uid);
     await deleteDoc(docRef);
+  }
+
+  async sendEmailSignInLink(email) {
+    if (!this.isFirebaseReady || !this.auth) {
+      throw new Error("Cloud sync is not connected. Connect Firebase first.");
+    }
+    const actionCodeSettings = {
+      url: window.location.origin,
+      handleCodeInApp: true
+    };
+    await sendSignInLinkToEmail(this.auth, email, actionCodeSettings);
+    window.localStorage.setItem("emailForSignIn", email);
+  }
+
+  isEmailSignInLink(url) {
+    if (!this.auth) return false;
+    return isSignInWithEmailLink(this.auth, url);
+  }
+
+  async completeEmailLinkSignIn(email, url) {
+    if (!this.isFirebaseReady || !this.auth) {
+      throw new Error("Cloud sync is not connected. Connect Firebase first.");
+    }
+    const result = await signInWithEmailLink(this.auth, email, url);
+    await this.checkOrCreateAccessRequest(result.user);
+    this.user = result.user;
+    this.notifyAuth();
+    window.localStorage.removeItem("emailForSignIn");
+    return result.user;
   }
 
   async registerWithEmail(email, password) {
