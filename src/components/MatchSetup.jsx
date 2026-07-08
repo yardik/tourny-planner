@@ -491,14 +491,14 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
   return (
     <div>
       {/* Page Title */}
-      {!isAnonymous && (
-        <div style={{ marginBottom: "24px" }}>
-          <h2 className="page-title" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <Users size={24} /> Match Team Builder
-          </h2>
+      <div style={{ marginBottom: "24px" }}>
+        <h2 className="page-title" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <Users size={24} /> Teams
+        </h2>
+        {!isAnonymous && (
           <p className="page-subtitle">Select who is playing today and generate fair teams automatically.</p>
-        </div>
-      )}
+        )}
+      </div>
 
       {!isGenerated ? (
         <div className={isAnonymous ? "" : "dashboard-grid"}>
@@ -647,7 +647,7 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                 </div>
 
                 <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "16px", marginTop: "auto" }}>
-                  {currentWarnings.length > 0 && (
+                  {currentWarnings.length > 0 && !isAnonymous && (
                     <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
                       {currentWarnings.map((warn, index) => (
                         <div 
@@ -698,8 +698,7 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
         <div className="glass-panel">
           {isAnonymous ? (
             <div style={{ marginBottom: "24px" }}>
-              <h3 style={{ fontSize: "20px", fontWeight: "700", marginBottom: "4px" }}>Generated Match Teams</h3>
-              <p style={{ color: "var(--text-secondary)", fontSize: "14px", margin: 0 }}>These teams have been generated for the upcoming match. The bracket will be built by a coordinator.</p>
+              <h3 style={{ fontSize: "20px", fontWeight: "700", margin: 0 }}>Generated Match Teams</h3>
             </div>
           ) : (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "12px" }}>
@@ -742,7 +741,7 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
             </div>
           )}
 
-          {currentWarnings.length > 0 && (
+          {currentWarnings.length > 0 && !isAnonymous && (
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "20px" }}>
               {currentWarnings.map((warn, index) => (
                 <div 
