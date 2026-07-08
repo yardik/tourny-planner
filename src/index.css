@@ -705,36 +705,48 @@ body {
     gap: 8px;
   }
 
-  .mobile-player-card .card-stats-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-top: 1px solid var(--border-color);
-    padding-top: 10px;
+  .mobile-player-card .mobile-stats-table {
+    width: 100%;
+    margin-top: 12px;
+    border-collapse: collapse;
     font-size: 13px;
+    border-top: 1px solid var(--border-color);
+  }
+
+  .mobile-player-card .mobile-stats-table th {
+    padding: 8px 8px 6px 0;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 10px;
     color: var(--text-secondary);
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border-color);
+    text-align: left;
   }
 
-  .mobile-player-card .stat-item {
-    display: flex;
-    align-items: center;
-    gap: 4px;
+  .mobile-player-card .mobile-stats-table th:last-child {
+    padding-right: 0;
+    text-align: right;
   }
 
-  .mobile-player-card .stat-label {
+  .mobile-player-card .mobile-stats-table td {
+    padding: 10px 8px 8px 0;
     font-weight: 500;
-  }
-
-  .mobile-player-card .stat-value {
-    font-weight: 600;
     color: var(--text-primary);
   }
 
-  .mobile-player-card .stat-value.text-success {
-    color: var(--success-color);
+  .mobile-player-card .mobile-stats-table td:last-child {
+    padding-right: 0;
+    text-align: right;
   }
 
-  .mobile-player-card .stat-value.text-danger {
+  .mobile-player-card .mobile-stats-table .text-success {
+    color: var(--success-color);
+    font-weight: 700;
+  }
+
+  .mobile-player-card .mobile-stats-table .text-danger {
     color: var(--danger-color);
+    font-weight: 700;
   }
 }

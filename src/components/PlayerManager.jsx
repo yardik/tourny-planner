@@ -447,22 +447,28 @@ export default function PlayerManager({ players, games, isAnonymous }) {
                     )}
                   </div>
                   
-                  <div className="card-stats-row">
-                    <div className="stat-item">
-                      <span className="stat-label">W/L:</span>
-                      <span className="stat-value text-success">{player.stats.wins}</span>
-                      <span>-</span>
-                      <span className="stat-value text-danger">{player.stats.losses}</span>
-                    </div>
-                    <div className="stat-item">
-                      <span className="stat-label">Win %:</span>
-                      <span className="stat-value">{player.stats.ratio}%</span>
-                    </div>
-                    <div className="stat-item">
-                      <span className="stat-label">Pts:</span>
-                      <span className="stat-value">{player.stats.pointsScored}:{player.stats.pointsAgainst}</span>
-                    </div>
-                  </div>
+                  <table className="mobile-stats-table">
+                    <thead>
+                      <tr>
+                        <th>W-L</th>
+                        <th>Win %</th>
+                        <th>Points</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <span className="text-success">{player.stats.wins}</span>
+                          <span style={{ margin: "0 4px", color: "var(--text-secondary)" }}>-</span>
+                          <span className="text-danger">{player.stats.losses}</span>
+                        </td>
+                        <td>{player.stats.ratio}%</td>
+                        <td>
+                          <strong>{player.stats.pointsScored}</strong>:{player.stats.pointsAgainst}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               ))}
             </div>
