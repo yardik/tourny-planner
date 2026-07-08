@@ -403,7 +403,7 @@ export default function PlayerManager({ players, games, isAnonymous }) {
             <div className="mobile-only player-card-list">
               {sortedPlayers.map((player) => (
                 <div key={player.id} className="mobile-player-card">
-                  <div className="card-header-row">
+                   <div className="card-header-row">
                     <span className="player-name-wrapper">
                       <span className="player-name">{player.name}</span>
                       <span 
@@ -419,28 +419,31 @@ export default function PlayerManager({ players, games, isAnonymous }) {
                           title="Duplicate name detected in database"
                         />
                       )}
+                    </span>
+                    
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                       <span className={`rank-badge rank-${player.rank.toLowerCase()}`}>
                         {player.rank}
                       </span>
-                    </span>
-                    {!isAnonymous && (
-                      <div className="card-actions">
-                        <button
-                          className="btn-icon-only"
-                          title="Edit Player"
-                          onClick={() => startEdit(player)}
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          className="btn-icon-only danger"
-                          title="Delete Player"
-                          onClick={() => handleDeletePlayer(player.id, player.name)}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    )}
+                      {!isAnonymous && (
+                        <div className="card-actions" style={{ marginLeft: "4px" }}>
+                          <button
+                            className="btn-icon-only"
+                            title="Edit Player"
+                            onClick={() => startEdit(player)}
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button
+                            className="btn-icon-only danger"
+                            title="Delete Player"
+                            onClick={() => handleDeletePlayer(player.id, player.name)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   
                   <table className="mobile-stats-table">
