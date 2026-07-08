@@ -34,7 +34,7 @@ export default function AuthModal({ isOpen, onClose }) {
       if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
         setErrorMsg("Invalid email or password.");
       } else if (err.code === "auth/email-already-in-use") {
-        setErrorMsg("This email is already registered.");
+        setErrorMsg("This email is already registered. Try signing in instead.");
       } else if (err.code === "auth/weak-password") {
         setErrorMsg("Password should be at least 6 characters.");
       } else {
