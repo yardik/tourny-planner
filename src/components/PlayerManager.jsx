@@ -332,8 +332,7 @@ export default function PlayerManager({ players, games, isAnonymous }) {
                     <th style={{ textAlign: "center" }}>Rank</th>
                     <th style={{ textAlign: "center" }}>W / L</th>
                     <th style={{ textAlign: "center" }}>Win %</th>
-                    <th style={{ textAlign: "center" }}>Pts For</th>
-                    <th style={{ textAlign: "center" }}>Pts Against</th>
+                    <th style={{ textAlign: "center" }}>Total Points</th>
                     {!isAnonymous && <th style={{ width: "80px", textAlign: "right" }}>Actions</th>}
                   </tr>
                 </thead>
@@ -373,9 +372,6 @@ export default function PlayerManager({ players, games, isAnonymous }) {
                       </td>
                       <td style={{ textAlign: "center", color: "var(--text-secondary)" }}>
                         {player.stats.pointsScored}
-                      </td>
-                      <td style={{ textAlign: "center", color: "var(--text-secondary)" }}>
-                        {player.stats.pointsAgainst}
                       </td>
                       {!isAnonymous && (
                         <td style={{ textAlign: "right" }}>
@@ -464,7 +460,7 @@ export default function PlayerManager({ players, games, isAnonymous }) {
                         </td>
                         <td>{player.stats.ratio}%</td>
                         <td>
-                          <strong>{player.stats.pointsScored}</strong>:{player.stats.pointsAgainst}
+                          {player.stats.pointsScored}
                         </td>
                       </tr>
                     </tbody>
