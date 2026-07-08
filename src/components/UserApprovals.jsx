@@ -167,7 +167,7 @@ export default function UserApprovals({ user }) {
                           )}
 
                           {/* Reject Action */}
-                          {!isRejected && !isSelf && (
+                          {isPending && !isSelf && (
                             <button
                               type="button"
                               className="btn btn-secondary"
