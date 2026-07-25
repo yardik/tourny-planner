@@ -655,7 +655,11 @@ function App() {
           className={`workspace-btn ${activeMode === "tournament" ? "active" : ""}`}
           onClick={() => {
             setActiveMode("tournament");
-            setActiveTab("brackets");
+            if (!matchSetup || !matchSetup.isGenerated) {
+              setActiveTab("signup");
+            } else {
+              setActiveTab("brackets");
+            }
           }}
         >
           <Trophy size={15} />
