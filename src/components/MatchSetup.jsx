@@ -602,7 +602,7 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                 </p>
               </div>
             ) : (
-              <div style={{ maxHeight: "400px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 {availablePlayers.map((player) => (
                   <div 
                     key={player.id} 
@@ -672,7 +672,7 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", height: "100%", justifyContent: "space-between" }}>
-                <div style={{ maxHeight: "330px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
                   {selectedPlayers.map((player) => (
                     <div 
                       key={player.id} 
