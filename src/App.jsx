@@ -22,7 +22,8 @@ import {
   Sun,
   Moon,
   Shield,
-  Database
+  Database,
+  UserPlus
 } from "lucide-react";
 import AuthModal from "./components/AuthModal";
 import UserApprovals from "./components/UserApprovals";
