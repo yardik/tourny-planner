@@ -1285,6 +1285,70 @@ class DatabaseService {
     this.notifyActiveTournament();
     this.notifyMatchSetup();
   }
+
+  // Manually push local offline data (players, games, history, active_tournament, match_setup) to Cloud Firestore on demand
+  async pushLocalDataToCloud() {
+    if (!this.firestore) {
+      throw new Error("Firebase Firestore is not initialized. Please configure Firebase in Admin Settings first.");
+    }
+
+    const players = JSON.parse(localStorage.getItem(STORAGE_KEYS.PLAYERS) || "[]");
+    const games = JSON.parse(localStorage.getItem(STORAGE_KEYS.GAMES) || "[]");
+    const history = JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]");
+    const savedActive = localStorage.getItem(STORAGE_KEYS.ACTIVE_TOURNAMENT);
+    const activeTournament = savedActive ? JSON.parse(savedActive) : null;
+    const savedSetup = localStorage.getItem(STORAGE_KEYS.MATCH_SETUP);
+    const matchSetup = savedSetup ? JSON.parse(savedSetup) : null;
+
+    let totalPushed = 0;
+
+    // 1. Push Players
+    for (const p of players) {
+      const docRef = doc(this.firestore, "players", p.id);
+      await setDoc(docRef, p);
+      totalPushed++;
+    }
+
+    // 2. Push Games
+    for (const g of games) {
+      const docRef = doc(this.firestore, "games", g.id);
+      await setDoc(docRef, g);
+      totalPushed++;
+    }
+
+    // 3. Push History
+    for (const h of history) {
+      const docRef = doc(this.firestore, "tournament_history", h.id);
+      const copy = JSON.parse(JSON.stringify(h));
+      if (copy.tournament) {
+        copy.tournament = serializeTournament(copy.tournament);
+      }
+      await setDoc(docRef, copy);
+      totalPushed++;
+    }
+
+    // 4. Push Active Tournament
+    if (activeTournament) {
+      const docRef = doc(this.firestore, "active_tournament", "current");
+      await setDoc(docRef, serializeTournament(activeTournament));
+      totalPushed++;
+    }
+
+    // 5. Push Match Setup
+    if (matchSetup) {
+      const docRef = doc(this.firestore, "match_setup", "current");
+      await setDoc(docRef, matchSetup);
+      totalPushed++;
+    }
+
+    return {
+      playersCount: players.length,
+      gamesCount: games.length,
+      historyCount: history.length,
+      hasActiveTournament: !!activeTournament,
+      totalPushed
+    };
+  }
 }
 
 const db = new DatabaseService();

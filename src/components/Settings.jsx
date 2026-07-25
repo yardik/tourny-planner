@@ -41,6 +41,25 @@ export default function Settings({ players, games, activeTab, theme, onThemeChan
   const [isPurging, setIsPurging] = useState(false);
   const [showPurgeBox, setShowPurgeBox] = useState(false);
 
+  // Push local offline data to Cloud states
+  const [isPushingLocal, setIsPushingLocal] = useState(false);
+  const [pushLocalSuccess, setPushLocalSuccess] = useState("");
+  const [pushLocalError, setPushLocalError] = useState("");
+
+  const handlePushLocalToCloud = async () => {
+    setIsPushingLocal(true);
+    setPushLocalSuccess("");
+    setPushLocalError("");
+    try {
+      const res = await db.pushLocalDataToCloud();
+      setPushLocalSuccess(`Successfully uploaded ${res.playersCount} players, ${res.gamesCount} games, and tournament setups to Cloud Firestore!`);
+    } catch (err) {
+      setPushLocalError("Failed to push local data: " + err.message);
+    } finally {
+      setIsPushingLocal(false);
+    }
+  };
+
   // Subscribe to DB sync status changes
   useEffect(() => {
     const unsub = db.subscribeStatus((status) => {
@@ -535,6 +554,63 @@ export default function Settings({ players, games, activeTab, theme, onThemeChan
                     </button>
                   </div>
                 </form>
+              </div>
+            )}
+          </div>
+
+          {/* Push Local Offline Data to Cloud Panel */}
+          <div style={{ marginTop: "24px", paddingTop: "20px", borderTop: "1px solid var(--border-color)" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: "700", display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+              <Upload size={18} /> Push Local Offline Data to Cloud
+            </h3>
+            <p style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "12px", lineHeight: "1.5" }}>
+              When in Offline Mode, changes stay strictly in your local browser storage and are <strong>never automatically pushed to the cloud</strong>. Click below to manually upload your local data to Cloud Firestore on demand.
+            </p>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handlePushLocalToCloud}
+              disabled={isPushingLocal || !db.getFirebaseConfig()}
+              style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 16px" }}
+            >
+              <Upload size={16} />
+              {isPushingLocal ? "Uploading Local Data..." : "Upload Local Data to Cloud Firestore"}
+            </button>
+
+            {pushLocalSuccess && (
+              <div style={{ 
+                padding: "10px 14px", 
+                background: "var(--success-glow)", 
+                border: "1px solid rgba(16, 185, 129, 0.3)", 
+                borderRadius: "var(--radius-sm)", 
+                fontSize: "13px",
+                color: "var(--text-primary)",
+                marginTop: "12px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
+              }}>
+                <CheckCircle size={16} style={{ color: "var(--success-color)", flexShrink: 0 }} />
+                <span>{pushLocalSuccess}</span>
+              </div>
+            )}
+
+            {pushLocalError && (
+              <div style={{ 
+                padding: "10px 14px", 
+                background: "rgba(239, 68, 68, 0.1)", 
+                border: "1px solid rgba(239, 68, 68, 0.3)", 
+                borderRadius: "var(--radius-sm)", 
+                fontSize: "13px",
+                color: "var(--danger-color)",
+                marginTop: "12px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
+              }}>
+                <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+                <span>{pushLocalError}</span>
               </div>
             )}
           </div>
