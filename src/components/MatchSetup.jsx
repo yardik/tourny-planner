@@ -33,25 +33,29 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
     }
   }, [matchSetup]);
 
-  // Sync changes from local states back up to the database (only for authenticated users)
+  // Sync changes from local states back up to the database with 400ms debounce to minimize write ops
   useEffect(() => {
     if (isAnonymous) return; // Anonymous users are read-only
 
-    const isDiff = 
-      JSON.stringify(matchSetup?.selectedPlayerIds) !== JSON.stringify(selectedPlayerIds) ||
-      JSON.stringify(matchSetup?.generatedTeams) !== JSON.stringify(generatedTeams) ||
-      matchSetup?.isGenerated !== isGenerated ||
-      matchSetup?.nextTournamentDate !== nextTournamentDate;
-      
-    if (isDiff) {
-      db.saveMatchSetup({
-        ...matchSetup,
-        selectedPlayerIds,
-        generatedTeams,
-        isGenerated,
-        nextTournamentDate
-      });
-    }
+    const timer = setTimeout(() => {
+      const isDiff = 
+        JSON.stringify(matchSetup?.selectedPlayerIds) !== JSON.stringify(selectedPlayerIds) ||
+        JSON.stringify(matchSetup?.generatedTeams) !== JSON.stringify(generatedTeams) ||
+        matchSetup?.isGenerated !== isGenerated ||
+        matchSetup?.nextTournamentDate !== nextTournamentDate;
+        
+      if (isDiff) {
+        db.saveMatchSetup({
+          ...matchSetup,
+          selectedPlayerIds,
+          generatedTeams,
+          isGenerated,
+          nextTournamentDate
+        });
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
   }, [selectedPlayerIds, generatedTeams, isGenerated, nextTournamentDate, isAnonymous, matchSetup]);
 
   // Clean up selection list and generated teams if players are deleted from the database
