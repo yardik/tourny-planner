@@ -41,7 +41,7 @@ gcloud pubsub topics create billing-auto-stop-topic
 # 4. Deploy the Cloud Function
 cd gcp_billing_pipeline
 gcloud functions deploy stopBillingOnOverBudget \
-  --runtime nodejs20 \
+  --runtime nodejs22 \
   --trigger-topic billing-auto-stop-topic \
   --region us-central1
 

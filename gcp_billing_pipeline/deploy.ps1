@@ -17,7 +17,7 @@ gcloud pubsub topics create $TOPIC_NAME
 
 Write-Host "4. Deploying Cloud Function '$FUNCTION_NAME'..." -ForegroundColor Cyan
 gcloud functions deploy $FUNCTION_NAME `
-  --runtime nodejs20 `
+  --runtime nodejs22 `
   --trigger-topic $TOPIC_NAME `
   --region $REGION `
   --entry-point stopBillingOnOverBudget
