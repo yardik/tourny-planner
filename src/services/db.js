@@ -202,7 +202,9 @@ class DatabaseService {
   }
 
   // Helper to read players list directly from localStorage
+  // Helper to read players list directly from localStorage
   getLocalPlayersList() {
+    if (this.isAnonymousUser()) return [];
     const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.PLAYERS) || "[]");
     return list.sort((a, b) => {
       const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -213,6 +215,7 @@ class DatabaseService {
 
   // Helper to read games list directly from localStorage
   getLocalGamesList() {
+    if (this.isAnonymousUser()) return [];
     const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.GAMES) || "[]");
     return list.sort((a, b) => {
       const dateA = a.date ? new Date(a.date).getTime() : 0;
@@ -223,6 +226,7 @@ class DatabaseService {
 
   // Helper to read tournament history list directly from localStorage
   getLocalHistoryList() {
+    if (this.isAnonymousUser()) return [];
     const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]");
     return list.sort((a, b) => {
       const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -233,6 +237,7 @@ class DatabaseService {
 
   // Helper to read active tournament directly from localStorage
   getLocalActiveTournament() {
+    if (this.isAnonymousUser()) return null;
     const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_TOURNAMENT);
     return saved ? JSON.parse(saved) : null;
   }
@@ -391,12 +396,20 @@ class DatabaseService {
         }
       );
     } else {
-      // Local storage fallback setup
-      this.playersCache = this.getLocalPlayersList();
-      this.gamesCache = this.getLocalGamesList();
-      this.historyCache = this.getLocalHistoryList();
-      this.activeTournamentCache = this.getLocalActiveTournament();
-      this.matchSetupCache = this.getLocalMatchSetup();
+      // Local storage fallback setup (authenticated offline mode only)
+      if (!this.isAnonymousUser()) {
+        this.playersCache = this.getLocalPlayersList();
+        this.gamesCache = this.getLocalGamesList();
+        this.historyCache = this.getLocalHistoryList();
+        this.activeTournamentCache = this.getLocalActiveTournament();
+        this.matchSetupCache = this.getLocalMatchSetup();
+      } else {
+        this.playersCache = [];
+        this.gamesCache = [];
+        this.historyCache = [];
+        this.activeTournamentCache = null;
+        this.matchSetupCache = { selectedPlayerIds: [], generatedTeams: [], isGenerated: false };
+      }
       this.notifyPlayers();
       this.notifyGames();
       this.notifyHistory();
@@ -570,11 +583,12 @@ class DatabaseService {
         const wasOffline = this.getSyncPreference() === "offline";
         this.user = user;
         
-        // If signed out (anonymous), reset preference to online
-        if (user && user.isAnonymous) {
+        // If signed out (anonymous), reset preference to online and purge any local storage items
+        if (this.isAnonymousUser()) {
           if (localStorage.getItem("horseshoe_sync_preference") === "offline") {
             localStorage.setItem("horseshoe_sync_preference", "online");
           }
+          this.clearLocalData();
         }
         
         this.notifyAuth();
