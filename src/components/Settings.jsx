@@ -36,6 +36,11 @@ export default function Settings({ players, games, activeTab, theme, onThemeChan
   const [authSuccess, setAuthSuccess] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
 
+  // Purge database confirmation states
+  const [purgeConfirmText, setPurgeConfirmText] = useState("");
+  const [isPurging, setIsPurging] = useState(false);
+  const [showPurgeBox, setShowPurgeBox] = useState(false);
+
   // Subscribe to DB sync status changes
   useEffect(() => {
     const unsub = db.subscribeStatus((status) => {
@@ -177,6 +182,26 @@ export default function Settings({ players, games, activeTab, theme, onThemeChan
       setAuthError(err.message);
     } finally {
       setAuthLoading(false);
+    }
+  };
+
+  // Purge all app data from cloud and local storage
+  const handlePurgeAllData = async (e) => {
+    e.preventDefault();
+    if (purgeConfirmText !== "I AM SURE, DO IT MAN") {
+      alert('You must type the exact phrase "I AM SURE, DO IT MAN" to confirm database purge.');
+      return;
+    }
+    setIsPurging(true);
+    try {
+      await db.wipeAllData();
+      setPurgeConfirmText("");
+      setShowPurgeBox(false);
+      alert("All player, game, and tournament data has been completely purged from Firebase Cloud Firestore and LocalStorage.");
+    } catch (err) {
+      alert("Failed to purge data: " + err.message);
+    } finally {
+      setIsPurging(false);
     }
   };
 
@@ -450,14 +475,68 @@ export default function Settings({ players, games, activeTab, theme, onThemeChan
 
             <div style={{ borderTop: "1px solid var(--border-color)", margin: "8px 0" }}></div>
 
-            <button 
-              type="button" 
-              className="btn btn-danger"
-              style={{ justifyContent: "flex-start", gap: "12px" }}
-              onClick={handleClearCache}
-            >
-              <Trash2 size={18} /> Reset Database (Wipe All Data)
-            </button>
+            {!showPurgeBox ? (
+              <button 
+                type="button" 
+                className="btn btn-danger"
+                style={{ justifyContent: "flex-start", gap: "12px" }}
+                onClick={() => setShowPurgeBox(true)}
+              >
+                <Trash2 size={18} /> Purge All Database Data
+              </button>
+            ) : (
+              <div style={{
+                padding: "16px",
+                background: "rgba(239, 68, 68, 0.08)",
+                border: "1px solid rgba(239, 68, 68, 0.3)",
+                borderRadius: "var(--radius-sm)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--danger-color)", fontWeight: "700", fontSize: "14px" }}>
+                  <AlertTriangle size={18} /> PERMANENT DATABASE PURGE
+                </div>
+                <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: 0, lineHeight: "1.4" }}>
+                  This will permanently delete <strong>ALL players, game scores, tournament history, active tournaments, and team setups</strong> from Firebase Cloud Firestore and local storage.
+                </p>
+
+                <form onSubmit={handlePurgeAllData} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <label style={{ fontSize: "12px", fontWeight: "600" }}>
+                    Type <code style={{ color: "var(--danger-color)", background: "var(--bg-secondary)", padding: "2px 6px", borderRadius: "4px" }}>I AM SURE, DO IT MAN</code> to confirm:
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={purgeConfirmText}
+                    onChange={(e) => setPurgeConfirmText(e.target.value)}
+                    placeholder="I AM SURE, DO IT MAN"
+                    style={{ borderColor: purgeConfirmText === "I AM SURE, DO IT MAN" ? "var(--danger-color)" : "var(--border-color)" }}
+                  />
+
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button
+                      type="submit"
+                      className="btn btn-danger"
+                      disabled={purgeConfirmText !== "I AM SURE, DO IT MAN" || isPurging}
+                      style={{ flex: 1 }}
+                    >
+                      {isPurging ? "Purging Everything..." : "🔥 PURGE ALL DATA NOW"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        setShowPurgeBox(false);
+                        setPurgeConfirmText("");
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
           </div>
         </div>
       </div>

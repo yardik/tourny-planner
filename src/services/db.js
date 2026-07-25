@@ -1232,6 +1232,34 @@ class DatabaseService {
     this.notifyActiveTournament();
     this.notifyMatchSetup();
   }
+
+  // Purge all player and tournament data from both Firebase Firestore and Local Storage
+  async wipeAllData() {
+    // 1. Wipe local memory and storage
+    this.clearLocalData();
+
+    // 2. Wipe Cloud Firestore if connected
+    if (this.isSyncing && this.firestore) {
+      const collectionsToWipe = ["players", "games", "tournament_history", "active_tournament", "match_setup"];
+      for (const colName of collectionsToWipe) {
+        try {
+          const colRef = collection(this.firestore, colName);
+          const snapshot = await getDocs(colRef);
+          for (const docSnap of snapshot.docs) {
+            await deleteDoc(doc(this.firestore, colName, docSnap.id));
+          }
+        } catch (err) {
+          console.error(`Error purging collection ${colName}:`, err);
+        }
+      }
+    }
+
+    this.notifyPlayers();
+    this.notifyGames();
+    this.notifyHistory();
+    this.notifyActiveTournament();
+    this.notifyMatchSetup();
+  }
 }
 
 const db = new DatabaseService();
