@@ -549,18 +549,43 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
               className="form-input" 
               style={{ width: "auto", padding: "8px 12px", height: "38px" }}
               value={nextTournamentDate}
-              onChange={(e) => setNextTournamentDate(e.target.value)}
+              onChange={async (e) => {
+                const val = e.target.value;
+                setNextTournamentDate(val);
+                try {
+                  await db.saveMatchSetup({
+                    ...matchSetup,
+                    selectedPlayerIds,
+                    generatedTeams,
+                    isGenerated,
+                    nextTournamentDate: val
+                  });
+                } catch (err) {
+                  console.error("Error saving tournament date:", err);
+                }
+              }}
             />
             <button 
               type="button" 
               className="btn btn-primary"
               style={{ padding: "8px 16px" }}
-              onClick={() => {
+              onClick={async () => {
                 if (!nextTournamentDate) {
                   alert("Please select a date first.");
                   return;
                 }
-                alert("Tournament scheduled for: " + formatDate(nextTournamentDate));
+                try {
+                  await db.saveMatchSetup({
+                    ...matchSetup,
+                    selectedPlayerIds,
+                    generatedTeams,
+                    isGenerated,
+                    nextTournamentDate
+                  });
+                  alert("Tournament successfully scheduled for: " + formatDate(nextTournamentDate));
+                } catch (err) {
+                  alert("Failed to schedule tournament: " + err.message);
+                }
               }}
             >
               Schedule Tournament
