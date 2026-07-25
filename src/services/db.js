@@ -696,15 +696,19 @@ class DatabaseService {
       const userDocRef = doc(this.firestore, "user_access_requests", user.uid);
       const userSnap = await getDoc(userDocRef);
       
-      if (!userSnap.exists()) {
+      const isTargetAdmin = user.email && user.email.toLowerCase() === "ckannon@gmail.com";
+
+      if (!userSnap.exists() || isTargetAdmin) {
         const lockDocRef = doc(this.firestore, "user_access_requests", "bootstrap_lock");
         const lockSnap = await getDoc(lockDocRef);
         
         const isFirstUser = !lockSnap.exists();
         
-        if (isFirstUser) {
+        if (isFirstUser || isTargetAdmin) {
           const batch = writeBatch(this.firestore);
-          batch.set(lockDocRef, { initializedAt: serverTimestamp() });
+          if (isFirstUser && !lockSnap.exists()) {
+            batch.set(lockDocRef, { initializedAt: serverTimestamp() });
+          }
           batch.set(userDocRef, {
             uid: user.uid,
             email: user.email,
