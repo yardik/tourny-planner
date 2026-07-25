@@ -646,7 +646,7 @@ function App() {
           }}
         >
           <Database size={15} />
-          <span>Master Records</span>
+          <span>Players & Tournaments</span>
         </button>
         {isUserApproved && (
           <button
