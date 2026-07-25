@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import AuthModal from "./components/AuthModal";
 import UserApprovals from "./components/UserApprovals";
+import SignupTab from "./components/SignupTab";
 import "./App.css";
 
 function App() {
@@ -47,6 +48,7 @@ function App() {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [theme, setTheme] = useState(db.getTheme());
   const initialRedirectDone = useRef(false);
+  const guestRedirectDone = useRef(false);
   const unsubProfileRef = useRef(null);
 
   const handleThemeChange = (newTheme) => {
@@ -136,6 +138,11 @@ function App() {
     const unsubMatchSetup = db.subscribeMatchSetup((updatedSetup) => {
       if (updatedSetup) {
         setMatchSetup(updatedSetup);
+        const isAnon = !db.user || db.user.isAnonymous;
+        if (isAnon && !guestRedirectDone.current) {
+          setActiveTab(updatedSetup.isGenerated ? "brackets" : "signup");
+          guestRedirectDone.current = true;
+        }
       }
     });
 
@@ -200,7 +207,12 @@ function App() {
       setActiveMode("admin");
       setActiveTab("settings");
     }
-  }, [user, userProfile, activeTab, activeMode]);
+
+    // Redirect guest if on signup tab but teams are already built
+    if (isAnonymous && activeTab === "signup" && matchSetup && matchSetup.isGenerated) {
+      setActiveTab("brackets");
+    }
+  }, [user, userProfile, activeTab, activeMode, matchSetup]);
 
   // Handle Firebase Email Link Sign In on load
   useEffect(() => {
@@ -654,6 +666,16 @@ function App() {
       <nav className="nav-tabs">
         {activeMode === "tournament" && (
           <>
+            {isAnonymous && matchSetup && !matchSetup.isGenerated && (
+              <button
+                type="button"
+                className={`nav-tab-btn ${activeTab === "signup" ? "active" : ""}`}
+                onClick={() => setActiveTab("signup")}
+              >
+                <UserPlus size={18} />
+                Sign Up
+              </button>
+            )}
             <button
               type="button"
               className={`nav-tab-btn ${activeTab === "matchmaker" ? "active" : ""}`}
@@ -720,6 +742,9 @@ function App() {
 
       {/* Tab Content Panels */}
       <main className="tab-content" style={{ paddingBottom: "40px" }}>
+        {activeTab === "signup" && (
+          <SignupTab players={players} matchSetup={matchSetup} />
+        )}
         {activeTab === "players" && (
           <PlayerManager players={players} games={games} isAnonymous={isAnonymous} />
         )}

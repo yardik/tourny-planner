@@ -17,6 +17,10 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
     const s = db.getLocalMatchSetup();
     return s ? s.isGenerated : false;
   });
+  const [nextTournamentDate, setNextTournamentDate] = useState(() => {
+    const s = db.getLocalMatchSetup();
+    return s ? (s.nextTournamentDate || "") : "";
+  });
   const [searchQuery, setSearchQuery] = useState("");
 
   // Sync changes from the matchSetup prop down to local states
@@ -25,6 +29,7 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
       setSelectedPlayerIds(matchSetup.selectedPlayerIds || []);
       setGeneratedTeams(matchSetup.generatedTeams || []);
       setIsGenerated(matchSetup.isGenerated || false);
+      setNextTournamentDate(matchSetup.nextTournamentDate || "");
     }
   }, [matchSetup]);
 
@@ -35,16 +40,19 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
     const isDiff = 
       JSON.stringify(matchSetup?.selectedPlayerIds) !== JSON.stringify(selectedPlayerIds) ||
       JSON.stringify(matchSetup?.generatedTeams) !== JSON.stringify(generatedTeams) ||
-      matchSetup?.isGenerated !== isGenerated;
+      matchSetup?.isGenerated !== isGenerated ||
+      matchSetup?.nextTournamentDate !== nextTournamentDate;
       
     if (isDiff) {
       db.saveMatchSetup({
+        ...matchSetup,
         selectedPlayerIds,
         generatedTeams,
-        isGenerated
+        isGenerated,
+        nextTournamentDate
       });
     }
-  }, [selectedPlayerIds, generatedTeams, isGenerated, isAnonymous]);
+  }, [selectedPlayerIds, generatedTeams, isGenerated, nextTournamentDate, isAnonymous, matchSetup]);
 
   // Clean up selection list and generated teams if players are deleted from the database
   useEffect(() => {
@@ -488,17 +496,74 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
 
   const currentWarnings = getWarnings();
 
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "Not Scheduled";
+    try {
+      return new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric"
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   return (
     <div>
       {/* Page Title */}
       <div style={{ marginBottom: "24px" }}>
         <h2 className="page-title" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <Users size={24} /> Teams
+          <Users size={24} /> {isAnonymous ? "Teams" : "Teams Setup"}
         </h2>
         {!isAnonymous && (
           <p className="page-subtitle">Select who is playing today and generate fair teams automatically.</p>
         )}
       </div>
+
+      {/* Schedule Tournament Section (Admin Only) */}
+      {!isAnonymous && (
+        <div className="glass-panel" style={{ 
+          marginBottom: "24px", 
+          display: "flex", 
+          gap: "16px", 
+          alignItems: "center", 
+          flexWrap: "wrap",
+          background: "var(--accent-light)",
+          borderColor: "var(--accent-color)"
+        }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "var(--text-secondary)" }}>Next Tournament Date</span>
+            <span style={{ fontSize: "15px", fontWeight: "700", color: "var(--text-primary)" }}>
+              {formatDate(nextTournamentDate)}
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginLeft: "auto", flexWrap: "wrap" }}>
+            <input 
+              type="date" 
+              className="form-input" 
+              style={{ width: "auto", padding: "8px 12px", height: "38px" }}
+              value={nextTournamentDate}
+              onChange={(e) => setNextTournamentDate(e.target.value)}
+            />
+            <button 
+              type="button" 
+              className="btn btn-primary"
+              style={{ padding: "8px 16px" }}
+              onClick={() => {
+                if (!nextTournamentDate) {
+                  alert("Please select a date first.");
+                  return;
+                }
+                alert("Tournament scheduled for: " + formatDate(nextTournamentDate));
+              }}
+            >
+              Schedule Tournament
+            </button>
+          </div>
+        </div>
+      )}
 
       {!isGenerated ? (
         <div className={isAnonymous ? "" : "dashboard-grid"}>

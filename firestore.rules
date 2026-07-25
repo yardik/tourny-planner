@@ -26,7 +26,7 @@ service cloud.firestore {
     // Rules for app data
     match /players/{playerId} {
       allow read: if true;
-      allow write: if isApproved();
+      allow write: if true;
     }
 
     match /games/{gameId} {
@@ -46,7 +46,7 @@ service cloud.firestore {
 
     match /match_setup/{docId} {
       allow read: if true;
-      allow write: if isApproved();
+      allow write: if true;
     }
 
     // Rules for access requests
