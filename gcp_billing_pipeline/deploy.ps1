@@ -1,7 +1,7 @@
 # Automated Deployment Script for GCP $20 Billing Pipeline
 # Usage: Open PowerShell in this folder and run: .\deploy.ps1
 
-$PROJECT_ID = "shoetracker"
+$PROJECT_ID = "tourny-planner"
 $REGION = "us-central1"
 $TOPIC_NAME = "billing-auto-stop-topic"
 $FUNCTION_NAME = "stopBillingOnOverBudget"

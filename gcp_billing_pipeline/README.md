@@ -1,6 +1,6 @@
 # Real-Time $20 GCP Billing Disconnect Pipeline
 
-This pipeline automatically **disconnects your Google Cloud Billing Account** from your project `shoetracker` as soon as monthly cost reaches or exceeds **$20.00**, immediately shutting down billable services and halting runaway charges in real time.
+This pipeline automatically **disconnects your Google Cloud Billing Account** from your project `tourny-planner` as soon as monthly cost reaches or exceeds **$20.00**, immediately shutting down billable services and halting runaway charges in real time.
 
 ---
 
@@ -16,7 +16,7 @@ Google Cloud Billing Budget ($20.00 Limit)
  Cloud Function: stopBillingOnOverBudget
            │
            ▼ (Calls Cloud Billing API)
- Unlinks Billing Account from project "shoetracker" (Halts paid services)
+ Unlinks Billing Account from project "tourny-planner" (Halts paid services)
 ```
 
 ---
@@ -29,7 +29,7 @@ Run the following commands in your Google Cloud SDK shell:
 
 ```bash
 # 1. Set project ID
-export PROJECT_ID="shoetracker"
+export PROJECT_ID="tourny-planner"
 gcloud config set project $PROJECT_ID
 
 # 2. Enable required Google Cloud APIs

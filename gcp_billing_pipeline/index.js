@@ -1,7 +1,7 @@
 const { GoogleAuth } = require('google-auth-library');
 const { cloudbilling_v1 } = require('googleapis');
 
-const PROJECT_ID = process.env.GCP_PROJECT || 'shoetracker';
+const PROJECT_ID = process.env.GCP_PROJECT || 'tourny-planner';
 const PROJECT_NAME = `projects/${PROJECT_ID}`;
 
 /**
