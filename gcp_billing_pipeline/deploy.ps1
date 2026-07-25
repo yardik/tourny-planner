@@ -15,15 +15,9 @@ gcloud services enable cloudbilling.googleapis.com cloudfunctions.googleapis.com
 Write-Host "3. Creating Pub/Sub Topic '$TOPIC_NAME'..." -ForegroundColor Cyan
 gcloud pubsub topics create $TOPIC_NAME
 
-Write-Host "4. Granting Pub/Sub Token Creator Role..." -ForegroundColor Cyan
-$PROJECT_NUMBER = (gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
-gcloud projects add-iam-policy-binding $PROJECT_ID `
-  --member="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-pubsub.iam.gserviceaccount.com" `
-  --role="roles/iam.serviceAccountTokenCreator"
-
-Write-Host "5. Deploying Gen2 Cloud Function '$FUNCTION_NAME'..." -ForegroundColor Cyan
+Write-Host "4. Deploying Cloud Function '$FUNCTION_NAME'..." -ForegroundColor Cyan
 gcloud functions deploy $FUNCTION_NAME `
-  --gen2 `
+  --no-gen2 `
   --runtime nodejs22 `
   --trigger-topic $TOPIC_NAME `
   --region $REGION `
