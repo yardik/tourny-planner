@@ -245,10 +245,11 @@ function App() {
     handleEmailLinkSignIn();
   }, []);
 
-  const isUserApproved = user && !user.isAnonymous && userProfile && userProfile.status === "approved";
+  const isTargetAdmin = user && user.email && user.email.toLowerCase() === "ckannon@gmail.com";
+  const isUserApproved = user && !user.isAnonymous && ((userProfile && userProfile.status === "approved") || isTargetAdmin);
   const isAnonymous = !isUserApproved;
-  const isAdmin = isUserApproved && userProfile.isAdmin;
-  const isPendingOrRejected = user && !user.isAnonymous && (!userProfile || userProfile.status !== "approved");
+  const isAdmin = isUserApproved && (userProfile?.isAdmin || isTargetAdmin);
+  const isPendingOrRejected = user && !user.isAnonymous && !isUserApproved;
   const showBlockedScreen = isPendingOrRejected;
 
   if (isSigningInWithLink) {
