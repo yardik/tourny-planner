@@ -949,13 +949,16 @@ class DatabaseService {
   }
 
   async updatePlayer(player) {
-    // Always update local storage and memory cache immediately for instant offline resilience
-    const players = this.getLocalPlayersList();
-    const idx = players.findIndex(p => p.id === player.id);
+    // Always update memory cache immediately for instant UI resilience
+    const idx = this.playersCache.findIndex(p => p.id === player.id);
     if (idx !== -1) {
-      players[idx] = { ...players[idx], ...player };
-      localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(players));
-      this.playersCache = players.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      this.playersCache[idx] = { ...this.playersCache[idx], ...player };
+      if (!this.isAnonymousUser()) {
+        const players = this.getLocalPlayersList();
+        const lIdx = players.findIndex(p => p.id === player.id);
+        if (lIdx !== -1) players[lIdx] = { ...players[lIdx], ...player };
+        localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(players));
+      }
       this.notifyPlayers();
     }
 

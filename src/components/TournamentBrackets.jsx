@@ -246,6 +246,11 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
 
       // Reset states
       await db.saveActiveTournament(null);
+      await db.saveMatchSetup({
+        selectedPlayerIds: [],
+        generatedTeams: [],
+        isGenerated: false
+      });
       setScoringGame(null);
     }
   };
