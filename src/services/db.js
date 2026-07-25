@@ -820,6 +820,9 @@ class DatabaseService {
       throw new Error("Cloud sync is not connected. Connect Firebase first.");
     }
     const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({
+      prompt: "select_account"
+    });
     const result = await signInWithPopup(this.auth, provider);
     await this.checkOrCreateAccessRequest(result.user);
     this.user = result.user;

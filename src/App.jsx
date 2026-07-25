@@ -260,9 +260,21 @@ function App() {
 
   if (user && !user.isAnonymous && isAuthLoading) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", gap: "16px", background: "var(--bg-primary)", color: "var(--text-primary)" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", gap: "16px", background: "var(--bg-primary)", color: "var(--text-primary)", padding: "24px", textAlign: "center" }}>
         <RefreshCw size={40} className="spin-animation" style={{ color: "var(--accent-color)" }} />
         <span style={{ fontSize: "14px", fontWeight: "600" }}>Verifying authorization...</span>
+        <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+          Logged in as <strong>{user.email || user.displayName || "Google Account"}</strong>
+        </span>
+
+        <div style={{ display: "flex", gap: "12px", marginTop: "12px", flexWrap: "wrap", justifyContent: "center" }}>
+          <button type="button" className="btn btn-primary" onClick={handleGoogleSignIn}>
+            Switch Google Account
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={handleSignOut}>
+            Sign Out & Guest View
+          </button>
+        </div>
       </div>
     );
   }
@@ -301,14 +313,24 @@ function App() {
             <span style={{ fontSize: "14px", fontWeight: "600" }}>{user.email}</span>
           </div>
 
-          <button
-            type="button"
-            className="btn btn-secondary"
-            style={{ width: "100%", marginTop: "12px" }}
-            onClick={handleSignOut}
-          >
-            Go back to public view
-          </button>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%", marginTop: "8px" }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ width: "100%" }}
+              onClick={handleGoogleSignIn}
+            >
+              Switch Google Account
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ width: "100%" }}
+              onClick={handleSignOut}
+            >
+              Sign Out & Return to Guest View
+            </button>
+          </div>
         </div>
       </div>
     );
