@@ -14,8 +14,10 @@ export default function SignupTab({ players, matchSetup }) {
   const nextTournamentDate = matchSetup?.nextTournamentDate || "";
   const selectedPlayerIds = matchSetup?.selectedPlayerIds || [];
 
-  // Filter signed-up player objects
-  const signedUpPlayers = players.filter((p) => selectedPlayerIds.includes(p.id));
+  // Map signed-up player objects stably to prevent real-time flicker
+  const signedUpPlayers = selectedPlayerIds
+    .map((id) => players.find((p) => p.id === id))
+    .filter(Boolean);
 
   // Filter existing players who haven't signed up yet
   const eligibleExistingPlayers = players

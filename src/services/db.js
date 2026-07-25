@@ -922,6 +922,14 @@ class DatabaseService {
       if (!this.isSyncing || !this.firestore) {
         throw new Error("Firebase is not connected or in offline mode.");
       }
+      const existingIdx = this.playersCache.findIndex(p => p.id === player.id);
+      if (existingIdx === -1) {
+        this.playersCache = [newPlayer, ...this.playersCache];
+      } else {
+        this.playersCache[existingIdx] = newPlayer;
+      }
+      this.notifyPlayers();
+
       const playerDoc = doc(this.firestore, "players", player.id);
       await setDoc(playerDoc, newPlayer);
       return;
@@ -1148,6 +1156,9 @@ class DatabaseService {
       if (!this.isSyncing || !this.firestore) {
         throw new Error("Firebase is not connected or in offline mode.");
       }
+      this.matchSetupCache = matchSetup;
+      this.notifyMatchSetup();
+
       const docRef = doc(this.firestore, "match_setup", "current");
       await setDoc(docRef, matchSetup);
       return;
