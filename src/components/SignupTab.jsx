@@ -293,7 +293,7 @@ export default function SignupTab({ players, matchSetup }) {
               <p style={{ color: "var(--text-secondary)", fontStyle: "italic" }}>No players have signed up yet. Be the first!</p>
             </div>
           ) : (
-            <div style={{ maxHeight: "380px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {signedUpPlayers
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((player) => (
