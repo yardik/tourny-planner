@@ -911,6 +911,18 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
   };
 
   if (!tournament) {
+    if (isAnonymous) {
+      return (
+        <div className="glass-panel" style={{ textAlign: "center", padding: "60px 20px" }}>
+          <Trophy size={64} style={{ color: "var(--text-secondary)", opacity: 0.3, marginBottom: "16px" }} />
+          <h2 style={{ fontSize: "22px", fontWeight: "700", marginBottom: "8px" }}>The Tournament has not yet started.</h2>
+          <p style={{ color: "var(--text-secondary)", maxWidth: "500px", margin: "0 auto 24px auto" }}>
+            Please check back once the tournament organizer has generated the match schedule.
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="glass-panel" style={{ textAlign: "center", padding: "60px 20px" }}>
         <Trophy size={64} style={{ color: "var(--text-secondary)", opacity: 0.3, marginBottom: "16px" }} />
