@@ -966,24 +966,57 @@ class DatabaseService {
   }
 
   async deletePlayer(playerId) {
-    // Always update local storage and memory cache immediately for instant offline resilience
+    // 1. Update players list in local storage and memory cache
     let players = this.getLocalPlayersList();
     players = players.filter(p => p.id !== playerId);
     localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(players));
     this.playersCache = players.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-    // Also delete this player's games to maintain consistency
+    // 2. Delete player's games to maintain consistency
     let games = this.getLocalGamesList();
     games = games.filter(g => g.player1Id !== playerId && g.player2Id !== playerId);
     localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(games));
     this.gamesCache = games.sort((a, b) => new Date(b.date) - new Date(a.date));
 
+    // 3. Atomically purge player from active match setup if selected
+    if (this.matchSetupCache && this.matchSetupCache.selectedPlayerIds) {
+      if (this.matchSetupCache.selectedPlayerIds.includes(playerId)) {
+        const cleanedIds = this.matchSetupCache.selectedPlayerIds.filter(id => id !== playerId);
+        const cleanedTeams = (this.matchSetupCache.generatedTeams || []).map(team => ({
+          p1: team.p1?.id === playerId ? null : team.p1,
+          p2: team.p2?.id === playerId ? null : team.p2
+        }));
+        const updatedSetup = {
+          ...this.matchSetupCache,
+          selectedPlayerIds: cleanedIds,
+          generatedTeams: cleanedTeams
+        };
+        this.matchSetupCache = updatedSetup;
+        if (!this.isAnonymousUser()) {
+          localStorage.setItem(STORAGE_KEYS.MATCH_SETUP, JSON.stringify(updatedSetup));
+        }
+        this.notifyMatchSetup();
+        if (this.isSyncing) {
+          try {
+            const setupDoc = doc(this.firestore, "match_setup", "current");
+            await setDoc(setupDoc, updatedSetup);
+          } catch (err) {
+            console.warn("Failed to sync match_setup cleanup on player delete:", err);
+          }
+        }
+      }
+    }
+
     this.notifyPlayers();
     this.notifyGames();
 
     if (this.isSyncing) {
-      const playerDoc = doc(this.firestore, "players", playerId);
-      await deleteDoc(playerDoc);
+      try {
+        const playerDoc = doc(this.firestore, "players", playerId);
+        await deleteDoc(playerDoc);
+      } catch (err) {
+        console.warn("Failed to delete player from cloud:", err);
+      }
     }
   }
 
