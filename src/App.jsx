@@ -141,6 +141,7 @@ function App() {
         setMatchSetup(updatedSetup);
         const isAnon = !db.user || db.user.isAnonymous;
         if (isAnon && !guestRedirectDone.current) {
+          setActiveMode("tournament");
           setActiveTab(updatedSetup.isGenerated ? "brackets" : "signup");
           guestRedirectDone.current = true;
         }
@@ -174,7 +175,8 @@ function App() {
       if (!initialRedirectDone.current) {
         if (!updatedUser || updatedUser.isAnonymous) {
           setActiveMode("tournament");
-          setActiveTab("brackets");
+          const setup = db.matchSetupCache;
+          setActiveTab((setup && setup.isGenerated) ? "brackets" : "signup");
         }
         initialRedirectDone.current = true;
       }
