@@ -917,7 +917,17 @@ class DatabaseService {
       createdAt: new Date().toISOString()
     };
 
-    // Always update local storage and memory cache immediately for instant offline resilience
+    if (this.isAnonymousUser()) {
+      // Direct Firebase operation for anonymous users - no local storage
+      if (!this.isSyncing || !this.firestore) {
+        throw new Error("Firebase is not connected or in offline mode.");
+      }
+      const playerDoc = doc(this.firestore, "players", player.id);
+      await setDoc(playerDoc, newPlayer);
+      return;
+    }
+
+    // Authenticated local-first updates
     const players = this.getLocalPlayersList();
     players.push(newPlayer);
     localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(players));
@@ -925,12 +935,8 @@ class DatabaseService {
     this.notifyPlayers();
 
     if (this.isSyncing) {
-      try {
-        const playerDoc = doc(this.firestore, "players", player.id);
-        await setDoc(playerDoc, newPlayer);
-      } catch (err) {
-        console.warn("Cloud sync for player addition failed (running in local-first mode):", err);
-      }
+      const playerDoc = doc(this.firestore, "players", player.id);
+      await setDoc(playerDoc, newPlayer);
     }
   }
 
@@ -1137,18 +1143,24 @@ class DatabaseService {
   }
 
   async saveMatchSetup(matchSetup) {
-    // Always update local storage and memory cache immediately for instant offline resilience
+    if (this.isAnonymousUser()) {
+      // Direct Firebase operation for anonymous users - no local storage
+      if (!this.isSyncing || !this.firestore) {
+        throw new Error("Firebase is not connected or in offline mode.");
+      }
+      const docRef = doc(this.firestore, "match_setup", "current");
+      await setDoc(docRef, matchSetup);
+      return;
+    }
+
+    // Authenticated local-first updates
     localStorage.setItem(STORAGE_KEYS.MATCH_SETUP, JSON.stringify(matchSetup));
     this.matchSetupCache = matchSetup;
     this.notifyMatchSetup();
 
     if (this.isSyncing) {
-      try {
-        const docRef = doc(this.firestore, "match_setup", "current");
-        await setDoc(docRef, matchSetup);
-      } catch (err) {
-        console.warn("Cloud sync for match setup failed (running in local-first mode):", err);
-      }
+      const docRef = doc(this.firestore, "match_setup", "current");
+      await setDoc(docRef, matchSetup);
     }
   }
 
