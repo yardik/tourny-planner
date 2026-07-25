@@ -925,8 +925,12 @@ class DatabaseService {
     this.notifyPlayers();
 
     if (this.isSyncing) {
-      const playerDoc = doc(this.firestore, "players", player.id);
-      await setDoc(playerDoc, newPlayer);
+      try {
+        const playerDoc = doc(this.firestore, "players", player.id);
+        await setDoc(playerDoc, newPlayer);
+      } catch (err) {
+        console.warn("Cloud sync for player addition failed (running in local-first mode):", err);
+      }
     }
   }
 
@@ -1134,15 +1138,17 @@ class DatabaseService {
 
   async saveMatchSetup(matchSetup) {
     // Always update local storage and memory cache immediately for instant offline resilience
-    if (!this.isAnonymousUser()) {
-      localStorage.setItem(STORAGE_KEYS.MATCH_SETUP, JSON.stringify(matchSetup));
-    }
+    localStorage.setItem(STORAGE_KEYS.MATCH_SETUP, JSON.stringify(matchSetup));
     this.matchSetupCache = matchSetup;
     this.notifyMatchSetup();
 
     if (this.isSyncing) {
-      const docRef = doc(this.firestore, "match_setup", "current");
-      await setDoc(docRef, matchSetup);
+      try {
+        const docRef = doc(this.firestore, "match_setup", "current");
+        await setDoc(docRef, matchSetup);
+      } catch (err) {
+        console.warn("Cloud sync for match setup failed (running in local-first mode):", err);
+      }
     }
   }
 
