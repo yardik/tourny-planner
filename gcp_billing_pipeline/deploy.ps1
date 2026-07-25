@@ -12,9 +12,9 @@ gcloud config set project $PROJECT_ID
 Write-Host "2. Enabling required Google Cloud APIs..." -ForegroundColor Cyan
 gcloud services enable cloudbilling.googleapis.com cloudfunctions.googleapis.com pubsub.googleapis.com cloudbuild.googleapis.com billingbudgets.googleapis.com
 
-Write-Host "3. Creating Pub/Sub Topic '$TOPIC_NAME' and initializing Service Account..." -ForegroundColor Cyan
+Write-Host "3. Creating Pub/Sub Topic '$TOPIC_NAME' and initializing Service Identity..." -ForegroundColor Cyan
 gcloud pubsub topics create $TOPIC_NAME
-gcloud beta pubsub service-account create --project=$PROJECT_ID
+gcloud beta services identity create --service=pubsub.googleapis.com --project=$PROJECT_ID
 
 Write-Host "4. Deploying Cloud Function '$FUNCTION_NAME'..." -ForegroundColor Cyan
 gcloud functions deploy $FUNCTION_NAME `
