@@ -660,7 +660,7 @@ function App() {
               onClick={() => setActiveTab("matchmaker")}
             >
               <Shuffle size={18} />
-              Teams Setup
+              {isAnonymous ? "Teams" : "Teams Setup"}
             </button>
             <button
               type="button"
