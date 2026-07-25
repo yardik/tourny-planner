@@ -21,14 +21,16 @@ import {
   User,
   Sun,
   Moon,
-  Shield
+  Shield,
+  Database
 } from "lucide-react";
 import AuthModal from "./components/AuthModal";
 import UserApprovals from "./components/UserApprovals";
 import "./App.css";
 
 function App() {
-  const [activeTab, setActiveTab] = useState("players");
+  const [activeTab, setActiveTab] = useState("brackets");
+  const [activeMode, setActiveMode] = useState("tournament");
   const [players, setPlayers] = useState([]);
   const [games, setGames] = useState([]);
   const [history, setHistory] = useState([]);
@@ -163,6 +165,7 @@ function App() {
 
       if (!initialRedirectDone.current) {
         if (!updatedUser || updatedUser.isAnonymous) {
+          setActiveMode("tournament");
           setActiveTab("brackets");
         }
         initialRedirectDone.current = true;
@@ -190,13 +193,14 @@ function App() {
     const isAnonymous = !isUserApproved;
     const isAdmin = isUserApproved && userProfile.isAdmin;
 
-    if (isAnonymous && activeTab === "settings") {
+    if (isAnonymous && (activeMode === "admin" || activeTab === "settings" || activeTab === "approvals")) {
+      setActiveMode("tournament");
       setActiveTab("brackets");
+    } else if (isUserApproved && !isAdmin && activeTab === "approvals") {
+      setActiveMode("admin");
+      setActiveTab("settings");
     }
-    if ((isAnonymous || !isAdmin) && activeTab === "approvals") {
-      setActiveTab("brackets");
-    }
-  }, [user, userProfile, activeTab]);
+  }, [user, userProfile, activeTab, activeMode]);
 
   // Handle Firebase Email Link Sign In on load
   useEffect(() => {
@@ -443,8 +447,16 @@ function App() {
               {isUserApproved && (
                 <button
                   type="button"
-                  onClick={() => setActiveTab(activeTab === "settings" ? "players" : "settings")}
-                  className={`header-settings-btn ${activeTab === "settings" ? "active" : ""}`}
+                  onClick={() => {
+                    if (activeMode === "admin" && activeTab === "settings") {
+                      setActiveMode("tournament");
+                      setActiveTab("brackets");
+                    } else {
+                      setActiveMode("admin");
+                      setActiveTab("settings");
+                    }
+                  }}
+                  className={`header-settings-btn ${activeMode === "admin" && activeTab === "settings" ? "active" : ""}`}
                   title="Settings"
                 >
                   <SettingsIcon size={16} />
@@ -599,50 +611,110 @@ function App() {
         </div>
       </header>
 
-      {/* Navigation Tabs */}
-      <nav className="nav-tabs">
+      {/* Workspace Switcher */}
+      <div className="workspace-switcher">
         <button
           type="button"
-          className={`nav-tab-btn ${activeTab === "players" ? "active" : ""}`}
-          onClick={() => setActiveTab("players")}
+          className={`workspace-btn ${activeMode === "tournament" ? "active" : ""}`}
+          onClick={() => {
+            setActiveMode("tournament");
+            setActiveTab("brackets");
+          }}
         >
-          <Users size={18} />
-          Players
+          <Trophy size={15} />
+          <span>Active Tournament</span>
         </button>
         <button
           type="button"
-          className={`nav-tab-btn ${activeTab === "matchmaker" ? "active" : ""}`}
-          onClick={() => setActiveTab("matchmaker")}
+          className={`workspace-btn ${activeMode === "database" ? "active" : ""}`}
+          onClick={() => {
+            setActiveMode("database");
+            setActiveTab("players");
+          }}
         >
-          <Shuffle size={18} />
-          Teams
+          <Database size={15} />
+          <span>Master Records</span>
         </button>
-        <button
-          type="button"
-          className={`nav-tab-btn ${activeTab === "brackets" ? "active" : ""}`}
-          onClick={() => setActiveTab("brackets")}
-        >
-          <Award size={18} />
-          Brackets
-        </button>
-        <button
-          type="button"
-          className={`nav-tab-btn ${activeTab === "scores" ? "active" : ""}`}
-          onClick={() => setActiveTab("scores")}
-        >
-          <History size={18} />
-          Tournament History
-        </button>
-
-        {isAdmin && (
+        {isUserApproved && (
           <button
             type="button"
-            className={`nav-tab-btn ${activeTab === "approvals" ? "active" : ""}`}
-            onClick={() => setActiveTab("approvals")}
+            className={`workspace-btn ${activeMode === "admin" ? "active" : ""}`}
+            onClick={() => {
+              setActiveMode("admin");
+              setActiveTab(isAdmin ? "approvals" : "settings");
+            }}
           >
-            <Shield size={18} />
-            Approvals
+            <Shield size={15} />
+            <span>Admin Panel</span>
           </button>
+        )}
+      </div>
+
+      {/* Navigation Tabs */}
+      <nav className="nav-tabs">
+        {activeMode === "tournament" && (
+          <>
+            <button
+              type="button"
+              className={`nav-tab-btn ${activeTab === "matchmaker" ? "active" : ""}`}
+              onClick={() => setActiveTab("matchmaker")}
+            >
+              <Shuffle size={18} />
+              Teams Setup
+            </button>
+            <button
+              type="button"
+              className={`nav-tab-btn ${activeTab === "brackets" ? "active" : ""}`}
+              onClick={() => setActiveTab("brackets")}
+            >
+              <Award size={18} />
+              Brackets & Play
+            </button>
+          </>
+        )}
+
+        {activeMode === "database" && (
+          <>
+            <button
+              type="button"
+              className={`nav-tab-btn ${activeTab === "players" ? "active" : ""}`}
+              onClick={() => setActiveTab("players")}
+            >
+              <Users size={18} />
+              Player Database
+            </button>
+            <button
+              type="button"
+              className={`nav-tab-btn ${activeTab === "scores" ? "active" : ""}`}
+              onClick={() => setActiveTab("scores")}
+            >
+              <History size={18} />
+              Tournament History
+            </button>
+          </>
+        )}
+
+        {activeMode === "admin" && isUserApproved && (
+          <>
+            {isAdmin && (
+              <button
+                type="button"
+                className={`nav-tab-btn ${activeTab === "approvals" ? "active" : ""}`}
+                onClick={() => setActiveTab("approvals")}
+              >
+                <Shield size={18} />
+                User Approvals
+              </button>
+            )}
+            <button
+              type="button"
+              className={`nav-tab-btn ${activeTab === "settings" ? "active" : ""}`}
+              onClick={() => setActiveTab("settings")}
+            >
+              <SettingsIcon size={18} />
+              System Settings
+            </button>
+          </>
         )}
       </nav>
 
