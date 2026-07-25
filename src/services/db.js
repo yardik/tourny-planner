@@ -1256,18 +1256,24 @@ class DatabaseService {
     // 1. Wipe local memory and storage
     this.clearLocalData();
 
-    // 2. Wipe Cloud Firestore if connected
+    // 2. Wipe Cloud Firestore using atomic writeBatch if connected
     if (this.isSyncing && this.firestore) {
       const collectionsToWipe = ["players", "games", "tournament_history", "active_tournament", "match_setup"];
       for (const colName of collectionsToWipe) {
         try {
           const colRef = collection(this.firestore, colName);
           const snapshot = await getDocs(colRef);
-          for (const docSnap of snapshot.docs) {
-            await deleteDoc(doc(this.firestore, colName, docSnap.id));
+          if (snapshot.docs.length > 0) {
+            // Use batch commit (up to 500 ops) for fast atomic deletion
+            const batch = writeBatch(this.firestore);
+            snapshot.docs.forEach((docSnap) => {
+              batch.delete(docSnap.ref);
+            });
+            await batch.commit();
           }
         } catch (err) {
           console.error(`Error purging collection ${colName}:`, err);
+          throw new Error(`Failed to purge cloud collection '${colName}': ` + err.message);
         }
       }
     }
