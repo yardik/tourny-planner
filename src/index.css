@@ -698,12 +698,20 @@ body {
   color: #64748b; /* Cool slate grey for light mode */
 }
 
+.gender-symbol.other {
+  color: #7c3aed; /* Violet/Purple for light mode */
+}
+
 .dark .gender-symbol.female {
   color: #c68a4c; /* Light tan/brown for dark mode contrast */
 }
 
 .dark .gender-symbol.male {
   color: #94a3b8; /* Light cool grey for dark mode contrast */
+}
+
+.dark .gender-symbol.other {
+  color: #a78bfa; /* Light purple for dark mode contrast */
 }
 
 /* Responsive display toggle classes */

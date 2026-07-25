@@ -252,6 +252,7 @@ export default function SignupTab({ players, matchSetup }) {
                   >
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
+                    <option value="Other">Other</option>
                   </select>
                 </div>
 
@@ -262,9 +263,9 @@ export default function SignupTab({ players, matchSetup }) {
                     value={newExp}
                     onChange={(e) => setNewExp(e.target.value)}
                   >
-                    <option value="Beginner">Beginner (Rank D)</option>
-                    <option value="Intermediate">Intermediate (Rank B)</option>
-                    <option value="Advanced">Advanced (Rank A)</option>
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
                   </select>
                 </div>
               </div>
@@ -308,8 +309,8 @@ export default function SignupTab({ players, matchSetup }) {
                   >
                     <span style={{ fontWeight: "600" }}>{player.name}</span>
                     <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                      <span className={`gender-symbol ${player.gender === "Female" ? "female" : "male"}`}>
-                        {player.gender === "Female" ? "F" : "M"}
+                      <span className={`gender-symbol ${player.gender === "Female" ? "female" : (player.gender === "Other" ? "other" : "male")}`}>
+                        {player.gender === "Female" ? "F" : (player.gender === "Other" ? "O" : "M")}
                       </span>
                     </div>
                   </div>

@@ -615,11 +615,11 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                     <div>
                       <span style={{ fontWeight: "600", marginRight: "8px" }}>{player.name}</span>
                       <span 
-                        className={`gender-symbol ${player.gender === "Female" ? "female" : "male"}`}
+                        className={`gender-symbol ${player.gender === "Female" ? "female" : (player.gender === "Other" ? "other" : "male")}`}
                         title={player.gender || "Male"}
                         style={{ marginRight: "10px" }}
                       >
-                        {player.gender === "Female" ? "F" : "M"}
+                        {player.gender === "Female" ? "F" : (player.gender === "Other" ? "O" : "M")}
                       </span>
                       {!isAnonymous && (
                         <span className={`rank-badge rank-${player.rank.toLowerCase()}`}>
@@ -685,11 +685,11 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                       <div>
                         <span style={{ fontWeight: "600", marginRight: "8px" }}>{player.name}</span>
                         <span 
-                          className={`gender-symbol ${player.gender === "Female" ? "female" : "male"}`}
+                          className={`gender-symbol ${player.gender === "Female" ? "female" : (player.gender === "Other" ? "other" : "male")}`}
                           title={player.gender || "Male"}
                           style={{ marginRight: "10px" }}
                         >
-                          {player.gender === "Female" ? "F" : "M"}
+                          {player.gender === "Female" ? "F" : (player.gender === "Other" ? "O" : "M")}
                         </span>
                         {!isAnonymous && (
                           <span className={`rank-badge rank-${player.rank.toLowerCase()}`}>
@@ -931,10 +931,10 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                               )}
                               <span style={{ fontWeight: "600" }}>{team.p1.name}</span>
                               <span 
-                                className={`gender-symbol ${team.p1.gender === "Female" ? "female" : "male"}`}
+                                className={`gender-symbol ${team.p1.gender === "Female" ? "female" : (team.p1.gender === "Other" ? "other" : "male")}`}
                                 title={team.p1.gender || "Male"}
                               >
-                                {team.p1.gender === "Female" ? "F" : "M"}
+                                {team.p1.gender === "Female" ? "F" : (team.p1.gender === "Other" ? "O" : "M")}
                               </span>
                             </div>
                             {!isAnonymous && (
@@ -1012,10 +1012,10 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                               )}
                               <span style={{ fontWeight: "600" }}>{team.p2.name}</span>
                               <span 
-                                className={`gender-symbol ${team.p2.gender === "Female" ? "female" : "male"}`}
+                                className={`gender-symbol ${team.p2.gender === "Female" ? "female" : (team.p2.gender === "Other" ? "other" : "male")}`}
                                 title={team.p2.gender || "Male"}
                               >
-                                {team.p2.gender === "Female" ? "F" : "M"}
+                                {team.p2.gender === "Female" ? "F" : (team.p2.gender === "Other" ? "O" : "M")}
                               </span>
                             </div>
                             {!isAnonymous && (

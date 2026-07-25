@@ -220,6 +220,14 @@ export default function PlayerManager({ players, games, isAnonymous }) {
                   >
                     Female
                   </button>
+                  <button
+                    type="button"
+                    className={`btn ${ (editingPlayer ? editGender : gender) === 'Other' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ flex: 1 }}
+                    onClick={() => editingPlayer ? setEditGender('Other') : setGender('Other')}
+                  >
+                    Other
+                  </button>
                 </div>
               </div>
 
@@ -399,10 +407,10 @@ export default function PlayerManager({ players, games, isAnonymous }) {
                         <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                           <span>{player.name}</span>
                           <span 
-                            className={`gender-symbol ${player.gender === "Female" ? "female" : "male"}`}
+                            className={`gender-symbol ${player.gender === "Female" ? "female" : (player.gender === "Other" ? "other" : "male")}`}
                             title={player.gender || "Male"}
                           >
-                            {player.gender === "Female" ? "F" : "M"}
+                            {player.gender === "Female" ? "F" : (player.gender === "Other" ? "O" : "M")}
                           </span>
                           {duplicateNames.includes(player.name.toLowerCase().trim()) && (
                             <AlertCircle 
@@ -463,10 +471,10 @@ export default function PlayerManager({ players, games, isAnonymous }) {
                     <span className="player-name-wrapper">
                       <span className="player-name">{player.name}</span>
                       <span 
-                        className={`gender-symbol ${player.gender === "Female" ? "female" : "male"}`}
+                        className={`gender-symbol ${player.gender === "Female" ? "female" : (player.gender === "Other" ? "other" : "male")}`}
                         title={player.gender || "Male"}
                       >
-                        {player.gender === "Female" ? "F" : "M"}
+                        {player.gender === "Female" ? "F" : (player.gender === "Other" ? "O" : "M")}
                       </span>
                       {duplicateNames.includes(player.name.toLowerCase().trim()) && (
                         <AlertCircle 
