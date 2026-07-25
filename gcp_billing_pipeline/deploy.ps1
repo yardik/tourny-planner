@@ -1,7 +1,7 @@
 # Automated Deployment Script for GCP $20 Billing Pipeline
 # Usage: Open PowerShell in this folder and run: .\deploy.ps1
 
-$PROJECT_ID = "tourny-planner"
+$PROJECT_ID = "shoetracker"
 $REGION = "us-central1"
 $TOPIC_NAME = "billing-auto-stop-topic"
 $FUNCTION_NAME = "stopBillingOnOverBudget"
@@ -17,7 +17,7 @@ gcloud pubsub topics create $TOPIC_NAME
 
 Write-Host "4. Deploying Cloud Function '$FUNCTION_NAME'..." -ForegroundColor Cyan
 gcloud functions deploy $FUNCTION_NAME `
-  --runtime nodejs18 `
+  --runtime nodejs20 `
   --trigger-topic $TOPIC_NAME `
   --region $REGION `
   --entry-point stopBillingOnOverBudget
