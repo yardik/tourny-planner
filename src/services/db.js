@@ -13,6 +13,7 @@ import {
   onSnapshot,
   query,
   orderBy,
+  limit,
   writeBatch,
   serverTimestamp
 } from "firebase/firestore";
@@ -268,7 +269,7 @@ class DatabaseService {
 
     // 2. Set up new subscriptions based on connection state
     if (this.isSyncing) {
-      const qPlayers = query(collection(this.firestore, "players"), orderBy("createdAt", "desc"));
+      const qPlayers = query(collection(this.firestore, "players"), orderBy("createdAt", "desc"), limit(500));
       this.firestorePlayersUnsub = onSnapshot(qPlayers, 
         (snapshot) => {
           const players = [];
@@ -296,7 +297,7 @@ class DatabaseService {
         }
       );
 
-      const qGames = query(collection(this.firestore, "games"), orderBy("date", "desc"));
+      const qGames = query(collection(this.firestore, "games"), orderBy("date", "desc"), limit(200));
       this.firestoreGamesUnsub = onSnapshot(qGames, 
         (snapshot) => {
           const games = [];
@@ -318,7 +319,7 @@ class DatabaseService {
         }
       );
 
-      const qHistory = query(collection(this.firestore, "tournament_history"), orderBy("createdAt", "desc"));
+      const qHistory = query(collection(this.firestore, "tournament_history"), orderBy("createdAt", "desc"), limit(50));
       this.firestoreHistoryUnsub = onSnapshot(qHistory, 
         (snapshot) => {
           const history = [];
