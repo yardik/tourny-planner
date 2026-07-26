@@ -42,10 +42,11 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
-    // User access requests: Authenticated users can read/request, Admin can manage
+    // User access requests: Creatable by any logged in account, editable ONLY by Admin
     match /user_access_requests/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
     }
   }
 }
