@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users, UserPlus, UserMinus, Shuffle, RotateCcw, AlertCircle, ArrowLeft, Trophy } from "lucide-react";
+import { Users, UserPlus, UserMinus, Shuffle, RotateCcw, AlertCircle, ArrowLeft, Trophy, DollarSign } from "lucide-react";
 import db from "../services/db";
 
 export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMatch }) {
@@ -95,6 +95,16 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
 
   // Get selected player objects
   const selectedPlayers = players.filter((p) => selectedPlayerIds.includes(p.id));
+  const unpaidActivePlayers = selectedPlayers.filter((p) => !p.isPaid);
+  const areAllActivePlayersPaid = unpaidActivePlayers.length === 0;
+
+  const handleTogglePaid = async (playerId, currentPaidStatus) => {
+    try {
+      await db.updatePlayer({ id: playerId, isPaid: !currentPaidStatus });
+    } catch (err) {
+      console.error("Failed to update player paid status:", err);
+    }
+  };
 
   // Add player to match
   const handleAddPlayer = (id) => {
@@ -727,14 +737,39 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                         )}
                       </div>
                       {!isAnonymous && (
-                        <button
-                          type="button"
-                          className="btn-icon-only danger"
-                          onClick={() => handleRemovePlayer(player.id)}
-                          title="Remove from Match"
-                        >
-                          <UserMinus size={18} />
-                        </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePaid(player.id, player.isPaid)}
+                            title={player.isPaid ? "Payment Verified ($ Paid)" : "Mark as Paid ($)"}
+                            style={{
+                              background: player.isPaid ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.05)",
+                              border: player.isPaid ? "1px solid #10b981" : "1px dashed rgba(16, 185, 129, 0.4)",
+                              borderRadius: "4px",
+                              padding: "4px 8px",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              cursor: "pointer",
+                              color: player.isPaid ? "#10b981" : "var(--text-secondary)",
+                              fontWeight: "700",
+                              fontSize: "12px",
+                              transition: "all 0.2s ease"
+                            }}
+                          >
+                            <DollarSign size={15} style={{ color: player.isPaid ? "#10b981" : "var(--text-secondary)" }} />
+                            <span>{player.isPaid ? "PAID" : "UNPAID"}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className="btn-icon-only danger"
+                            onClick={() => handleRemovePlayer(player.id)}
+                            title="Remove from Match"
+                          >
+                            <UserMinus size={18} />
+                          </button>
+                        </div>
                       )}
                     </div>
                   ))}
@@ -765,6 +800,26 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                     </div>
                   )}
 
+                  {selectedPlayers.length >= 2 && !areAllActivePlayersPaid && !isAnonymous && (
+                    <div style={{
+                      display: "flex",
+                      gap: "8px",
+                      alignItems: "flex-start",
+                      color: "var(--danger-color)",
+                      backgroundColor: "rgba(239, 68, 68, 0.1)",
+                      border: "1px solid rgba(239, 68, 68, 0.3)",
+                      padding: "10px",
+                      borderRadius: "var(--radius-sm)",
+                      fontSize: "13px",
+                      marginBottom: "12px"
+                    }}>
+                      <AlertCircle size={16} style={{ flexShrink: 0, marginTop: "2px" }} />
+                      <span>
+                        <strong>Payment Required:</strong> All active players must be marked as Paid ($) before generating teams. Unpaid: {unpaidActivePlayers.map(p => p.name).join(", ")}.
+                      </span>
+                    </div>
+                  )}
+
                   {selectedPlayers.length < 2 && (
                     <div style={{ display: "flex", gap: "6px", alignItems: "center", color: "var(--text-secondary)", fontSize: "13px", marginBottom: "12px" }}>
                       <AlertCircle size={16} />
@@ -777,7 +832,7 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                       className="btn btn-primary"
                       style={{ width: "100%", gap: "10px" }}
                       onClick={handleGenerateTeams}
-                      disabled={selectedPlayers.length < 2 || selectedPlayers.length % 2 !== 0}
+                      disabled={selectedPlayers.length < 2 || selectedPlayers.length % 2 !== 0 || !areAllActivePlayersPaid}
                     >
                       <Shuffle size={18} /> Generate Teams
                     </button>
