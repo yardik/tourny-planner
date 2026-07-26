@@ -32,9 +32,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Active tournament: Public read, strictly ADMIN ONLY write
     match /active_tournament/{docId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     // Match setup: Players/guests can add/remove themselves from selectedPlayerIds, Admin required for all other fields
@@ -48,7 +49,7 @@ service cloud.firestore {
 
     // User access requests: Creatable by any logged in account, editable ONLY by Admin
     match /user_access_requests/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
       allow create: if isAuthenticated();
       allow update, delete: if isAdmin();
     }
