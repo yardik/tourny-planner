@@ -100,25 +100,30 @@ function App() {
 
   const [hasLostConnection, setHasLostConnection] = useState(false);
   const disconnectTimerRef = useRef(null);
+  const isInitialConnectedRef = useRef(false);
 
-  // Monitor Firestore connection loss threshold (2 seconds)
+  // Monitor Firestore connection loss threshold (only AFTER initial load completes)
   useEffect(() => {
-    const isOfflineState = !navigator.onLine || syncInfo.status === "error" || syncInfo.fromCache === true;
+    // Skip checking during initial connection handshake while data is first loading
+    if (!isDataLoaded && !isInitialConnectedRef.current) return;
+
+    const isOfflineState = !navigator.onLine || syncInfo.status === "error" || (syncInfo.status === "synced" && syncInfo.fromCache === true);
 
     if (isOfflineState) {
       if (!disconnectTimerRef.current && !hasLostConnection) {
         disconnectTimerRef.current = setTimeout(() => {
           setHasLostConnection(true);
-        }, 2000); // 2-second disconnection threshold
+        }, 2500); // 2.5-second disconnection threshold
       }
     } else {
+      isInitialConnectedRef.current = true;
       if (disconnectTimerRef.current) {
         clearTimeout(disconnectTimerRef.current);
         disconnectTimerRef.current = null;
       }
       setHasLostConnection(false);
     }
-  }, [syncInfo]);
+  }, [syncInfo, isDataLoaded]);
 
   // Window online/offline event listeners
   useEffect(() => {
