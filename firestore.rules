@@ -13,11 +13,11 @@ service cloud.firestore {
       );
     }
 
-    // Public read for guest signups & bracket viewing
+    // Players: Anyone can read & add themselves, ONLY Admin can edit or delete
     match /players/{playerId} {
       allow read: if true;
       allow create: if true;
-      allow update, delete: if isAuthenticated();
+      allow update, delete: if isAdmin();
     }
 
     match /games/{gameId} {
