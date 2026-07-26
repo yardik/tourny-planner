@@ -37,9 +37,13 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
+    // Match setup: Players/guests can add/remove themselves from selectedPlayerIds, Admin required for all other fields
     match /match_setup/{docId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow create: if true;
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['selectedPlayerIds'])
+      );
     }
 
     // User access requests: Creatable by any logged in account, editable ONLY by Admin
