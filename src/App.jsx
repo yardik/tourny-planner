@@ -48,6 +48,8 @@ function App() {
   const [isSigningInWithLink, setIsSigningInWithLink] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [theme, setTheme] = useState(db.getTheme());
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [hasConnectionFailed, setHasConnectionFailed] = useState(false);
   const initialRedirectDone = useRef(false);
   const guestRedirectDone = useRef(false);
   const unsubProfileRef = useRef(null);
@@ -135,6 +137,13 @@ function App() {
       setTournament(updatedActive);
     });
 
+    // Connection timeout for initial data load (6 seconds)
+    const loadTimeout = setTimeout(() => {
+      if (!isDataLoaded) {
+        setHasConnectionFailed(true);
+      }
+    }, 6000);
+
     // Subscribe to match setup changes
     const unsubMatchSetup = db.subscribeMatchSetup((updatedSetup) => {
       if (updatedSetup) {
@@ -146,6 +155,7 @@ function App() {
           guestRedirectDone.current = true;
         }
       }
+      setIsDataLoaded(true);
     });
 
     // Subscribe to auth changes
@@ -184,6 +194,7 @@ function App() {
 
     // Clean up subscriptions on unmount
     return () => {
+      clearTimeout(loadTimeout);
       unsubStatus();
       unsubPlayers();
       unsubGames();
@@ -251,6 +262,70 @@ function App() {
   const isAdmin = isUserApproved && (userProfile?.isAdmin || isTargetAdmin);
   const isPendingOrRejected = user && !user.isAnonymous && !isUserApproved;
   const showBlockedScreen = isPendingOrRejected;
+  const showCannotConnectScreen = isAnonymous && (syncInfo.status === "error" || (hasConnectionFailed && !isDataLoaded));
+
+  if (showCannotConnectScreen) {
+    return (
+      <div style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(15, 23, 42, 0.85)",
+        backdropFilter: "blur(8px)",
+        zIndex: 9999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px"
+      }}>
+        <div className="glass-panel" style={{
+          maxWidth: "420px",
+          width: "100%",
+          textAlign: "center",
+          padding: "36px 24px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "16px",
+          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.5)",
+          border: "1px solid var(--border-color)",
+          borderRadius: "var(--radius-md)"
+        }}>
+          <div style={{
+            width: "60px",
+            height: "60px",
+            borderRadius: "50%",
+            background: "rgba(239, 68, 68, 0.15)",
+            border: "1px solid rgba(239, 68, 68, 0.3)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "var(--danger-color)"
+          }}>
+            <CloudOff size={32} />
+          </div>
+          <div>
+            <h2 style={{ fontSize: "20px", fontWeight: "700", marginBottom: "8px", color: "var(--text-primary)" }}>
+              Cannot Connect
+            </h2>
+            <p style={{ fontSize: "14px", color: "var(--text-secondary)", lineHeight: "1.5", margin: 0 }}>
+              Unable to load tournament data from the server. Please check your network connection and try again.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ width: "100%", padding: "12px", marginTop: "8px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", fontSize: "14px" }}
+            onClick={() => window.location.reload()}
+          >
+            <RefreshCw size={18} /> Retry Connection
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (isSigningInWithLink) {
     return (
