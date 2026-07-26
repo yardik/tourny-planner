@@ -1,30 +1,51 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // App data collections (public read/write for guest signups & tournament scoring)
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.email != null && request.auth.token.email.lower() == 'ckannon@gmail.com') ||
+        (exists(/databases/$(database)/documents/user_access_requests/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/user_access_requests/$(request.auth.uid)).data.isAdmin == true)
+      );
+    }
+
+    // Public read for guest signups & bracket viewing
     match /players/{playerId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if isAuthenticated();
     }
 
     match /games/{gameId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if isAuthenticated();
     }
 
+    // Tournament history: Public read, strictly ADMIN ONLY write
     match /tournament_history/{historyId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     match /active_tournament/{docId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAuthenticated();
     }
 
     match /match_setup/{docId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAuthenticated();
     }
 
-    // Access requests rules
+    // User access requests: Authenticated users can read/request, Admin can manage
     match /user_access_requests/{userId} {
-      allow read, write: if true;
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
     }
   }
 }
