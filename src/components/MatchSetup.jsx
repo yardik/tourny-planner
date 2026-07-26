@@ -111,9 +111,13 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
     setSelectedPlayerIds([...selectedPlayerIds, id]);
   };
 
-  // Remove player from match
+  // Remove player from match with confirmation
   const handleRemovePlayer = (id) => {
-    setSelectedPlayerIds(selectedPlayerIds.filter((pId) => pId !== id));
+    const player = players.find((p) => p.id === id);
+    const name = player ? player.name : "this player";
+    if (window.confirm(`Are you sure you want to remove ${name} from active match players?`)) {
+      setSelectedPlayerIds(selectedPlayerIds.filter((pId) => pId !== id));
+    }
   };
 
   // Add all players
