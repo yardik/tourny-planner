@@ -113,7 +113,7 @@ function App() {
       if (!disconnectTimerRef.current && !hasLostConnection) {
         disconnectTimerRef.current = setTimeout(() => {
           setHasLostConnection(true);
-        }, 2500); // 2.5-second disconnection threshold
+        }, 10000); // 10-second disconnection threshold
       }
     } else {
       isInitialConnectedRef.current = true;
@@ -139,7 +139,7 @@ function App() {
       if (!disconnectTimerRef.current && !hasLostConnection) {
         disconnectTimerRef.current = setTimeout(() => {
           setHasLostConnection(true);
-        }, 2000);
+        }, 10000); // 10-second disconnection threshold
       }
     };
 
@@ -193,12 +193,12 @@ function App() {
       setTournament(updatedActive);
     });
 
-    // Connection timeout for initial data load (6 seconds)
+    // Connection timeout for initial data load (10 seconds)
     const loadTimeout = setTimeout(() => {
       if (!isDataLoaded) {
         setHasConnectionFailed(true);
       }
-    }, 6000);
+    }, 10000);
 
     // Subscribe to match setup changes
     const unsubMatchSetup = db.subscribeMatchSetup((updatedSetup) => {
