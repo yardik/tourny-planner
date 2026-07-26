@@ -193,13 +193,13 @@ class DatabaseService {
   subscribeStatus(listener) {
     this.statusListeners.add(listener);
     // Initial call
-    listener({ status: this.syncStatus, error: this.syncErrorMsg });
+    listener({ status: this.syncStatus, error: this.syncErrorMsg, fromCache: this.isFromCache || false });
     return () => this.statusListeners.delete(listener);
   }
 
   notifyStatus() {
     this.statusListeners.forEach(listener => 
-      listener({ status: this.syncStatus, error: this.syncErrorMsg })
+      listener({ status: this.syncStatus, error: this.syncErrorMsg, fromCache: this.isFromCache || false })
     );
   }
 
@@ -271,7 +271,7 @@ class DatabaseService {
     // 2. Set up new subscriptions based on connection state
     if (this.isSyncing) {
       const qPlayers = query(collection(this.firestore, "players"), orderBy("createdAt", "desc"), limit(500));
-      this.firestorePlayersUnsub = onSnapshot(qPlayers, 
+      this.firestorePlayersUnsub = onSnapshot(qPlayers, { includeMetadataChanges: true },
         (snapshot) => {
           const players = [];
           snapshot.forEach(doc => {
@@ -282,7 +282,8 @@ class DatabaseService {
             localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(players));
           }
           this.notifyPlayers();
-          this.syncStatus = "synced";
+          this.isFromCache = snapshot.metadata.fromCache;
+          this.syncStatus = snapshot.metadata.fromCache ? "error" : "synced";
           this.notifyStatus();
         },
         (error) => {

@@ -98,6 +98,57 @@ function App() {
     }
   };
 
+  const [hasLostConnection, setHasLostConnection] = useState(false);
+  const disconnectTimerRef = useRef(null);
+
+  // Monitor Firestore connection loss threshold (2 seconds)
+  useEffect(() => {
+    const isOfflineState = !navigator.onLine || syncInfo.status === "error" || syncInfo.fromCache === true;
+
+    if (isOfflineState) {
+      if (!disconnectTimerRef.current && !hasLostConnection) {
+        disconnectTimerRef.current = setTimeout(() => {
+          setHasLostConnection(true);
+        }, 2000); // 2-second disconnection threshold
+      }
+    } else {
+      if (disconnectTimerRef.current) {
+        clearTimeout(disconnectTimerRef.current);
+        disconnectTimerRef.current = null;
+      }
+      setHasLostConnection(false);
+    }
+  }, [syncInfo]);
+
+  // Window online/offline event listeners
+  useEffect(() => {
+    const handleOnline = () => {
+      if (disconnectTimerRef.current) {
+        clearTimeout(disconnectTimerRef.current);
+        disconnectTimerRef.current = null;
+      }
+      setHasLostConnection(false);
+    };
+
+    const handleOffline = () => {
+      if (!disconnectTimerRef.current && !hasLostConnection) {
+        disconnectTimerRef.current = setTimeout(() => {
+          setHasLostConnection(true);
+        }, 2000);
+      }
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      if (disconnectTimerRef.current) {
+        clearTimeout(disconnectTimerRef.current);
+      }
+    };
+  }, []);
+
   // Close dropdown on window click outside
   useEffect(() => {
     if (!showUserDropdown) return;
@@ -262,7 +313,11 @@ function App() {
   const isAdmin = isUserApproved && (userProfile?.isAdmin || isTargetAdmin);
   const isPendingOrRejected = user && !user.isAnonymous && !isUserApproved;
   const showBlockedScreen = isPendingOrRejected;
-  const showCannotConnectScreen = isAnonymous && (syncInfo.status === "error" || (hasConnectionFailed && !isDataLoaded));
+  const showCannotConnectScreen = isAnonymous && (
+    syncInfo.status === "error" || 
+    (hasConnectionFailed && !isDataLoaded) ||
+    hasLostConnection
+  );
 
   if (showCannotConnectScreen) {
     return (
