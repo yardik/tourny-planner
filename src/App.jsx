@@ -318,11 +318,7 @@ function App() {
   const isAdmin = isUserApproved && (userProfile?.isAdmin || isTargetAdmin);
   const isPendingOrRejected = user && !user.isAnonymous && !isUserApproved;
   const showBlockedScreen = isPendingOrRejected;
-  const showCannotConnectScreen = isAnonymous && (
-    syncInfo.status === "error" || 
-    (hasConnectionFailed && !isDataLoaded) ||
-    hasLostConnection
-  );
+  const showCannotConnectScreen = isAnonymous && (hasLostConnection || (hasConnectionFailed && !isDataLoaded));
 
   if (showCannotConnectScreen) {
     return (
