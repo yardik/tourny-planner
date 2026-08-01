@@ -31,7 +31,9 @@ import SignupTab from "./components/SignupTab";
 import "./App.css";
 
 function App() {
-  const [activeTab, setActiveTab] = useState("brackets");
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem("horseshoes_active_tab") || "brackets";
+  });
   const [activeMode, setActiveMode] = useState("tournament");
   const [players, setPlayers] = useState([]);
   const [games, setGames] = useState([]);
@@ -58,6 +60,10 @@ function App() {
     setTheme(newTheme);
     db.setTheme(newTheme);
   };
+
+  useEffect(() => {
+    localStorage.setItem("horseshoes_active_tab", activeTab);
+  }, [activeTab]);
 
   const handleToggleSyncPreference = async () => {
     const targetPref = syncPreference === "online" ? "offline" : "online";
@@ -207,7 +213,10 @@ function App() {
         const isAnon = !db.user || db.user.isAnonymous;
         if (isAnon && !guestRedirectDone.current) {
           setActiveMode("tournament");
-          setActiveTab(updatedSetup.isGenerated ? "brackets" : "signup");
+          const savedTab = localStorage.getItem("horseshoes_active_tab");
+          if (!savedTab) {
+            setActiveTab(updatedSetup.isGenerated ? "brackets" : "signup");
+          }
           guestRedirectDone.current = true;
         }
       }
@@ -242,7 +251,10 @@ function App() {
         if (!updatedUser || updatedUser.isAnonymous) {
           setActiveMode("tournament");
           const setup = db.matchSetupCache;
-          setActiveTab((setup && setup.isGenerated) ? "brackets" : "signup");
+          const savedTab = localStorage.getItem("horseshoes_active_tab");
+          if (!savedTab) {
+            setActiveTab((setup && setup.isGenerated) ? "brackets" : "signup");
+          }
         }
         initialRedirectDone.current = true;
       }

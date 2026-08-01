@@ -992,6 +992,27 @@ class DatabaseService {
     }
   }
 
+  async clearAllPaidFlags() {
+    const paidPlayers = this.playersCache.filter((p) => p.isPaid);
+    if (paidPlayers.length === 0) return;
+
+    this.playersCache = this.playersCache.map((p) => ({ ...p, isPaid: false }));
+    if (!this.isAnonymousUser()) {
+      const players = this.getLocalPlayersList();
+      const updated = players.map((p) => ({ ...p, isPaid: false }));
+      localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(updated));
+    }
+    this.notifyPlayers();
+
+    if (this.isSyncing) {
+      const promises = paidPlayers.map((p) => {
+        const playerDoc = doc(this.firestore, "players", p.id);
+        return updateDoc(playerDoc, { isPaid: false });
+      });
+      await Promise.all(promises);
+    }
+  }
+
   async deletePlayer(playerId) {
     // 1. Update players list in local storage and memory cache
     let players = this.getLocalPlayersList();

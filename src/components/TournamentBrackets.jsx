@@ -1,17 +1,20 @@
 import { useState, useEffect } from "react";
 import db from "../services/db";
-import { Trophy, Calendar, Award, AlertCircle, Play, CheckCircle, RotateCcw, Save, X, ArrowRight, UserPlus } from "lucide-react";
+import { Trophy, Calendar, Award, AlertCircle, Play, CheckCircle, RotateCcw, Save, X, ArrowRight, UserPlus, Activity, Clock, Search } from "lucide-react";
 
 const groupKeys = ["A", "B", "C", "D"];
 
 export default function TournamentBrackets({ players, games, tournament, isAnonymous }) {
   const [scoringGame, setScoringGame] = useState(null); // { roundIdx, gameIdx, score1: "", score2: "", isPlayoffs: false, playoffGroup: "" }
   const [errorMsg, setErrorMsg] = useState("");
+  const [startingGamePopup, setStartingGamePopup] = useState(null);
   
   // Playoffs tab state: "A" | "B" | "C" | "D"
   const [activePlayoffTab, setActivePlayoffTab] = useState("A");
   const [lines, setLines] = useState([]);
   const [svgSize, setSvgSize] = useState({ width: 0, height: 0 });
+  const [assigningTeamSlot, setAssigningTeamSlot] = useState(null); // { roundIdx, gameIdx, slot }
+  const [gameFilter, setGameFilter] = useState("");
 
   // Recalculate bracket lines when tournament state, active tab, or viewport changes
   useEffect(() => {
@@ -268,10 +271,53 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
     }
   };
 
+  const getPitsInUse = () => {
+    const inUse = new Set();
+    if (!tournament) return inUse;
+
+    if (tournament.status === "starting" && tournament.rounds) {
+      tournament.rounds.forEach(round => {
+        round.forEach(game => {
+          if (game.started && game.score1 === null && game.score2 === null && game.pit) {
+            inUse.add(game.pit);
+          }
+        });
+      });
+    } else if (tournament.status === "playoffs" && tournament.rankedBrackets) {
+      Object.values(tournament.rankedBrackets).forEach(groupBracket => {
+        if (groupBracket.rounds) {
+          groupBracket.rounds.forEach(round => {
+            round.forEach(game => {
+              if (game.started && game.score1 === null && game.score2 === null && game.pit) {
+                inUse.add(game.pit);
+              }
+            });
+          });
+        }
+      });
+    }
+    return inUse;
+  };
+
   // Mark a game as started
   const handleStartGame = async (gameId, isPlayoffs = false, playoffGroup = "", roundIdx = 0, gameIdx = 0) => {
     try {
+      const pitsInUse = getPitsInUse();
+      let availablePit = null;
+      for (let i = 1; i <= 8; i++) {
+        if (!pitsInUse.has(i)) {
+          availablePit = i;
+          break;
+        }
+      }
+
+      if (availablePit === null) {
+        alert("No pits are available right now. Please finish an ongoing game first.");
+        return;
+      }
+
       const updatedTournament = { ...tournament };
+      let gameToStart = null;
 
       if (isPlayoffs) {
         const groupBracket = { ...tournament.rankedBrackets[playoffGroup] };
@@ -279,7 +325,9 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
         const game = { ...updatedRounds[roundIdx][gameIdx] };
 
         game.started = true;
+        game.pit = availablePit;
         updatedRounds[roundIdx][gameIdx] = game;
+        gameToStart = game;
 
         updatedTournament.rankedBrackets = {
           ...tournament.rankedBrackets,
@@ -293,11 +341,34 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
         const game = { ...updatedRounds[roundIdx][gameIdx] };
 
         game.started = true;
+        game.pit = availablePit;
         updatedRounds[roundIdx][gameIdx] = game;
+        gameToStart = game;
+
         updatedTournament.rounds = updatedRounds;
       }
 
       await db.saveActiveTournament(updatedTournament);
+
+      // Determine team names for the popup
+      let t1Name = "Team 1";
+      let t2Name = "Team 2";
+      if (isPlayoffs) {
+        t1Name = gameToStart.t1 ? `${gameToStart.t1.p1?.name || "TBD"} & ${gameToStart.t1.p2?.name || "TBD"}` : "TBD";
+        t2Name = gameToStart.t2 ? `${gameToStart.t2.p1?.name || "TBD"} & ${gameToStart.t2.p2?.name || "TBD"}` : "TBD";
+      } else {
+        const t1 = tournament.teams[gameToStart.team1Idx];
+        const t2 = tournament.teams[gameToStart.team2Idx];
+        if (t1) t1Name = `${t1.p1?.name || ""} & ${t1.p2?.name || ""}`;
+        if (t2) t2Name = `${t2.p1?.name || ""} & ${t2.p2?.name || ""}`;
+      }
+
+      setStartingGamePopup({
+        team1: t1Name,
+        team2: t2Name,
+        pit: availablePit
+      });
+
     } catch (err) {
       console.error("Failed to start game:", err);
       alert("Failed to start game: " + err.message);
@@ -321,6 +392,131 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
     setErrorMsg("");
   };
 
+  // Dynamic Swiss-Style Round Progression
+  const processDynamicRoundProgression = async (currentTournament) => {
+    if (!currentTournament.rounds) return currentTournament;
+
+    let madeChanges = false;
+    const newRounds = [...currentTournament.rounds];
+    const numTeams = currentTournament.teams.length;
+    
+    // We only process if we have an even number of teams and no byes as per rules
+    if (numTeams % 2 !== 0) return currentTournament;
+
+    const playedAgainst = Array(numTeams).fill(null).map(() => new Set());
+    const gamesCompleted = Array(numTeams).fill(0);
+    const gamesAssigned = Array(numTeams).fill(0);
+
+    const stats = Array(numTeams).fill(null).map((_, idx) => ({
+      idx,
+      wins: 0,
+      points: 0,
+      differential: 0
+    }));
+
+    for (let r = 0; r < newRounds.length; r++) {
+      for (let g = 0; g < newRounds[r].length; g++) {
+        const game = newRounds[r][g];
+        const t1 = game.team1Idx;
+        const t2 = game.team2Idx;
+        
+        gamesAssigned[t1]++;
+        gamesAssigned[t2]++;
+        playedAgainst[t1].add(t2);
+        playedAgainst[t2].add(t1);
+
+        if (game.score1 !== null && game.score2 !== null) {
+          gamesCompleted[t1]++;
+          gamesCompleted[t2]++;
+          
+          stats[t1].points += game.score1;
+          stats[t2].points += game.score2;
+          stats[t1].differential += (game.score1 - game.score2);
+          stats[t2].differential += (game.score2 - game.score1);
+          
+          if (game.score1 > game.score2) stats[t1].wins++;
+          else if (game.score2 > game.score1) stats[t2].wins++;
+        }
+      }
+    }
+
+    const maxRounds = Math.min(3, numTeams - 1);
+
+    for (let targetRound = 1; targetRound < maxRounds; targetRound++) {
+      const idleTeams = [];
+      for (let i = 0; i < numTeams; i++) {
+        if (gamesCompleted[i] === targetRound && gamesAssigned[i] === targetRound) {
+          idleTeams.push(i);
+        }
+      }
+
+      if (idleTeams.length >= 2) {
+        idleTeams.sort((a, b) => {
+          if (stats[a].wins !== stats[b].wins) return stats[b].wins - stats[a].wins;
+          if (stats[a].differential !== stats[b].differential) return stats[b].differential - stats[a].differential;
+          return stats[b].points - stats[a].points;
+        });
+
+        let bestPairs = [];
+        const searchPairs = (unmatched, currentPairs) => {
+          if (currentPairs.length > bestPairs.length) {
+            bestPairs = currentPairs;
+          }
+          if (unmatched.length < 2) return;
+          if (currentPairs.length + Math.floor(unmatched.length / 2) <= bestPairs.length) return;
+          
+          const t1 = unmatched[0];
+          let foundMatch = false;
+          for (let i = 1; i < unmatched.length; i++) {
+            const t2 = unmatched[i];
+            if (!playedAgainst[t1].has(t2)) {
+              foundMatch = true;
+              const remaining = unmatched.filter(t => t !== t1 && t !== t2);
+              searchPairs(remaining, [...currentPairs, [t1, t2]]);
+            }
+          }
+          
+          if (!foundMatch) {
+            searchPairs(unmatched.slice(1), currentPairs);
+          }
+        };
+
+        searchPairs(idleTeams, []);
+
+        if (bestPairs.length > 0) {
+          if (!newRounds[targetRound]) {
+            newRounds[targetRound] = [];
+          }
+          const newGames = bestPairs.map((pair, idx) => ({
+            id: `g_${targetRound}_${pair[0]}_${pair[1]}_${Date.now()}_${idx}`,
+            team1Idx: pair[0],
+            team2Idx: pair[1],
+            score1: null,
+            score2: null
+          }));
+
+          newRounds[targetRound].push(...newGames);
+          madeChanges = true;
+          
+          for (const game of newGames) {
+            gamesAssigned[game.team1Idx]++;
+            gamesAssigned[game.team2Idx]++;
+            playedAgainst[game.team1Idx].add(game.team2Idx);
+            playedAgainst[game.team2Idx].add(game.team1Idx);
+          }
+        }
+      }
+    }
+
+    if (madeChanges) {
+      return {
+        ...currentTournament,
+        rounds: newRounds
+      };
+    }
+    return currentTournament;
+  };
+
   // Save game score
   const handleSaveScore = async (e) => {
     e.preventDefault();
@@ -336,6 +532,11 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
 
     if (s1 === s2) {
       setErrorMsg("Horseshoes games cannot end in a tie. One team must win.");
+      return;
+    }
+
+    if (Math.max(s1, s2) !== 21) {
+      setErrorMsg("The winning team must have exactly 21 points (e.g. 21 to N).");
       return;
     }
 
@@ -421,11 +622,12 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
         game.score2 = s2;
         updatedRounds[scoringGame.roundIdx][scoringGame.gameIdx] = game;
 
-        const updatedTournament = {
+        let updatedTournament = {
           ...tournament,
           rounds: updatedRounds
         };
 
+        updatedTournament = await processDynamicRoundProgression(updatedTournament);
         await db.saveActiveTournament(updatedTournament);
 
         if (team1 && team2) {
@@ -564,8 +766,41 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
     return order;
   };
 
-  // Generate Ranked Single-Elimination Bracket for playoffs
-  const handleGeneratePlayoffs = async () => {
+  const handleDragStart = (e, teamObj, sourceGroup) => {
+    e.dataTransfer.setData("application/json", JSON.stringify({ teamObj, sourceGroup }));
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = async (e, targetGroup) => {
+    e.preventDefault();
+    const dataStr = e.dataTransfer.getData("application/json");
+    if (!dataStr) return;
+    try {
+      const { teamObj, sourceGroup } = JSON.parse(dataStr);
+      if (sourceGroup === targetGroup) return;
+
+      const newAssignments = { ...tournament.playoffAssignments };
+      
+      newAssignments[sourceGroup] = newAssignments[sourceGroup].filter(
+        t => t.team.p1.id !== teamObj.team.p1.id
+      );
+      
+      newAssignments[targetGroup] = [...newAssignments[targetGroup], teamObj];
+      newAssignments[targetGroup].sort((a, b) => a.rank - b.rank);
+
+      await db.saveActiveTournament({
+        ...tournament,
+        playoffAssignments: newAssignments
+      });
+    } catch (err) {
+      console.error("Drop failed", err);
+    }
+  };
+
+  const handleReviewPlayoffs = async () => {
     const finalStandings = getStandings(); // sorted teams desc
     const T = finalStandings.length;
 
@@ -574,18 +809,25 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
       return;
     }
 
-    // Partition sorted standings into 4 groups: A, B, C, D
-    const g = Math.floor(T / 4);
-    const r = T % 4;
+    let aSize = 0, bSize = 0, cSize = 0, dSize = 0;
+    if (T >= 20) {
+      dSize = 5; cSize = 5;
+      const rem = T - 10;
+      aSize = Math.ceil(rem / 2); bSize = Math.floor(rem / 2);
+    } else if (T >= 16) {
+      dSize = 4; cSize = 4;
+      const rem = T - 8;
+      aSize = Math.ceil(rem / 2); bSize = Math.floor(rem / 2);
+    } else if (T >= 12) {
+      dSize = 0; cSize = 4;
+      const rem = T - 4;
+      aSize = Math.ceil(rem / 2); bSize = Math.floor(rem / 2);
+    } else {
+      aSize = Math.ceil(T / 2); bSize = Math.floor(T / 2);
+    }
 
-    const sizes = [
-      g + (r > 0 ? 1 : 0), // A
-      g + (r > 1 ? 1 : 0), // B
-      g + (r > 2 ? 1 : 0), // C
-      g                  // D
-    ];
-
-    const playoffGroups = { A: [], B: [], C: [], D: [] };
+    const sizes = [aSize, bSize, cSize, dSize];
+    const playoffAssignments = { A: [], B: [], C: [], D: [] };
     let standingIdx = 0;
 
     const groupKeys = ["A", "B", "C", "D"];
@@ -593,10 +835,39 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
       const size = sizes[kIdx];
       for (let i = 0; i < size; i++) {
         if (standingIdx < T) {
-          playoffGroups[key].push(finalStandings[standingIdx].team);
+          playoffAssignments[key].push({
+            ...finalStandings[standingIdx],
+            rank: standingIdx + 1
+          });
           standingIdx++;
         }
       }
+    });
+
+    try {
+      await db.saveActiveTournament({
+        ...tournament,
+        status: "adjust_playoffs",
+        playoffAssignments
+      });
+    } catch (err) {
+      setErrorMsg("Failed to transition to playoff adjustment.");
+      console.error(err);
+    }
+  };
+
+  // Generate Ranked Single-Elimination Bracket for playoffs
+  const handleFinalizePlayoffs = async () => {
+    if (!tournament.playoffAssignments) {
+      alert("No playoff assignments found.");
+      return;
+    }
+
+    const playoffGroups = { A: [], B: [], C: [], D: [] };
+    const groupKeys = ["A", "B", "C", "D"];
+    
+    groupKeys.forEach(key => {
+      playoffGroups[key] = (tournament.playoffAssignments[key] || []).map(s => s.team);
     });
 
     const rankedBrackets = {};
@@ -904,7 +1175,8 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
     const updatedTournament = {
       ...tournament,
       status: "playoffs",
-      rankedBrackets
+      rankedBrackets,
+      playoffAssignments: null
     };
 
     await db.saveActiveTournament(updatedTournament);
@@ -935,7 +1207,8 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
   }
 
   const standings = getStandings();
-  const showPlayoffButton = areStartingRoundsComplete();
+  const showPlayoffButton = areStartingRoundsComplete() && tournament.status === "starting";
+  const isAdjustingPlayoffs = tournament.status === "adjust_playoffs";
   const isPlayoffs = tournament.status === "playoffs" && tournament.rankedBrackets;
 
   const renderGameCard = (game, rIdx, gIdx, rounds) => {
@@ -1003,9 +1276,11 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
             <span>Match {gIdx + 1}</span>
             {isScored ? (
               <span style={{ color: "var(--success-color)", fontWeight: "700", fontSize: "13px" }}>Scored</span>
-            ) : (game.started && (
-              <span style={{ color: "#eab308", fontWeight: "700", fontSize: "13px" }}>IN PROGRESS</span>
-            ))}
+            ) : (game.started ? (
+              <span style={{ color: "#eab308", fontWeight: "700", fontSize: "13px" }}>
+                IN PROGRESS {game.pit && `(Pit ${game.pit})`}
+              </span>
+            ) : null)}
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -1170,11 +1445,482 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
       </div>
     );
   };
+  const handleClearSchedule = async (groupKey) => {
+    if (!window.confirm("Are you sure you want to clear all games? This cannot be undone.")) return;
+    try {
+      const updatedTournament = { ...tournament };
+      if (groupKey === "MAIN") {
+        updatedTournament.rounds = [];
+      } else {
+        updatedTournament.rankedBrackets = {
+          ...tournament.rankedBrackets,
+          [groupKey]: {
+            ...tournament.rankedBrackets[groupKey],
+            rounds: []
+          }
+        };
+      }
+      await db.saveActiveTournament(updatedTournament);
+    } catch (err) {
+      setErrorMsg("Failed to clear schedule.");
+      console.error(err);
+    }
+  };
+
+  const handleAddRound = async (groupKey) => {
+    try {
+      const updatedTournament = { ...tournament };
+      if (groupKey === "MAIN") {
+        updatedTournament.rounds = [...(updatedTournament.rounds || []), []];
+      } else {
+        const currentBracket = updatedTournament.rankedBrackets[groupKey] || { isRoundRobin: true, rounds: [] };
+        const currentRounds = currentBracket.rounds || [];
+        updatedTournament.rankedBrackets = {
+          ...tournament.rankedBrackets,
+          [groupKey]: { ...currentBracket, rounds: [...currentRounds, []] }
+        };
+      }
+      await db.saveActiveTournament(updatedTournament);
+    } catch (err) {
+      setErrorMsg("Failed to add round.");
+      console.error(err);
+    }
+  };
+
+  const handleAddGame = async (groupKey, roundIdx) => {
+    try {
+      const updatedTournament = { ...tournament };
+      if (groupKey === "MAIN") {
+        const newGame = {
+          id: `gp_main_manual_${roundIdx}_${Date.now()}`,
+          team1Idx: null,
+          team2Idx: null,
+          score1: null,
+          score2: null,
+          winnerIdx: null
+        };
+        const updatedRounds = [...updatedTournament.rounds];
+        updatedRounds[roundIdx] = [...updatedRounds[roundIdx], newGame];
+        updatedTournament.rounds = updatedRounds;
+      } else {
+        const currentBracket = updatedTournament.rankedBrackets[groupKey];
+        const updatedRounds = [...currentBracket.rounds];
+        const newGame = {
+          id: `gp_rr_manual_${roundIdx}_${Date.now()}`,
+          t1: null,
+          t2: null,
+          score1: null,
+          score2: null,
+          winnerIdx: null,
+          fromGame1Id: null,
+          fromGame2Id: null,
+          isRoundRobin: true
+        };
+        updatedRounds[roundIdx] = [...updatedRounds[roundIdx], newGame];
+        updatedTournament.rankedBrackets = {
+          ...tournament.rankedBrackets,
+          [groupKey]: { ...currentBracket, rounds: updatedRounds }
+        };
+      }
+      await db.saveActiveTournament(updatedTournament);
+    } catch (err) {
+      setErrorMsg("Failed to add game.");
+      console.error(err);
+    }
+  };
+
+  const handleRemoveGame = async (groupKey, roundIdx, gameIdx) => {
+    if (!window.confirm("Remove this game?")) return;
+    try {
+      const updatedTournament = { ...tournament };
+      if (groupKey === "MAIN") {
+        const updatedRounds = [...updatedTournament.rounds];
+        updatedRounds[roundIdx] = updatedRounds[roundIdx].filter((_, i) => i !== gameIdx);
+        updatedTournament.rounds = updatedRounds;
+      } else {
+        const currentBracket = updatedTournament.rankedBrackets[groupKey];
+        const updatedRounds = [...currentBracket.rounds];
+        updatedRounds[roundIdx] = updatedRounds[roundIdx].filter((_, i) => i !== gameIdx);
+        updatedTournament.rankedBrackets = {
+          ...tournament.rankedBrackets,
+          [groupKey]: { ...currentBracket, rounds: updatedRounds }
+        };
+      }
+      await db.saveActiveTournament(updatedTournament);
+    } catch (err) {
+      setErrorMsg("Failed to remove game.");
+      console.error(err);
+    }
+  };
+
+  const handleAssignTeam = async (team, explicitIdx = null) => {
+    if (!assigningTeamSlot) return;
+    const { groupKey, roundIdx, gameIdx, slot } = assigningTeamSlot;
+    try {
+      const updatedTournament = { ...tournament };
+      if (groupKey === "MAIN") {
+        let teamIdx = explicitIdx;
+        if (teamIdx === null || teamIdx === undefined || teamIdx < 0) {
+          teamIdx = tournament.teams.findIndex(t => 
+            t === team || 
+            (Boolean(team?.id) && Boolean(t?.id) && t.id === team.id) || 
+            (t.p1?.name === team?.p1?.name && (t.p2?.name || "") === (team?.p2?.name || ""))
+          );
+        }
+        const updatedRounds = [...updatedTournament.rounds];
+        const game = { ...updatedRounds[roundIdx][gameIdx] };
+        game[slot] = teamIdx >= 0 ? teamIdx : null;
+        updatedRounds[roundIdx][gameIdx] = game;
+        updatedTournament.rounds = updatedRounds;
+      } else {
+        const currentBracket = updatedTournament.rankedBrackets[groupKey];
+        const updatedRounds = [...currentBracket.rounds];
+        const game = { ...updatedRounds[roundIdx][gameIdx] };
+        game[slot] = team;
+        updatedRounds[roundIdx][gameIdx] = game;
+        updatedTournament.rankedBrackets = {
+          ...tournament.rankedBrackets,
+          [groupKey]: { ...currentBracket, rounds: updatedRounds }
+        };
+      }
+      await db.saveActiveTournament(updatedTournament);
+      setAssigningTeamSlot(null);
+    } catch (err) {
+      setErrorMsg("Failed to assign team.");
+      console.error(err);
+    }
+  };
+
+  const handleRemoveTeam = async (groupKey, roundIdx, gameIdx, slot) => {
+    try {
+      const updatedTournament = { ...tournament };
+      if (groupKey === "MAIN") {
+        const updatedRounds = [...updatedTournament.rounds];
+        const game = { ...updatedRounds[roundIdx][gameIdx] };
+        game[slot] = null;
+        updatedRounds[roundIdx][gameIdx] = game;
+        updatedTournament.rounds = updatedRounds;
+      } else {
+        const currentBracket = updatedTournament.rankedBrackets[groupKey];
+        const updatedRounds = [...currentBracket.rounds];
+        const game = { ...updatedRounds[roundIdx][gameIdx] };
+        game[slot] = null;
+        updatedRounds[roundIdx][gameIdx] = game;
+        updatedTournament.rankedBrackets = {
+          ...tournament.rankedBrackets,
+          [groupKey]: { ...currentBracket, rounds: updatedRounds }
+        };
+      }
+      await db.saveActiveTournament(updatedTournament);
+    } catch (err) {
+      setErrorMsg("Failed to remove team.");
+      console.error(err);
+    }
+  };
 
 
+  const pitsInUseSet = getPitsInUse();
+
+  const allMainGames = [];
+  if (!isPlayoffs && tournament.rounds) {
+    tournament.rounds.forEach((round, rIdx) => {
+      round.forEach((game, gIdx) => {
+        const isScored = game.score1 !== null && game.score2 !== null;
+        const isRecording = scoringGame?.roundIdx === rIdx && scoringGame?.gameIdx === gIdx && !scoringGame.isPlayoffs;
+        allMainGames.push({
+          ...game,
+          rIdx,
+          gIdx,
+          isScored,
+          isRecording
+        });
+      });
+    });
+  }
+
+  const matchesFilter = (gameObj) => {
+    if (!gameFilter) return true;
+    const q = gameFilter.toLowerCase();
+    const t1 = tournament.teams[gameObj.team1Idx];
+    const t2 = tournament.teams[gameObj.team2Idx];
+    const n1 = t1?.p1?.name || "";
+    const n2 = t1?.p2?.name || "";
+    const n3 = t2?.p1?.name || "";
+    const n4 = t2?.p2?.name || "";
+    return n1.toLowerCase().includes(q) || n2.toLowerCase().includes(q) || n3.toLowerCase().includes(q) || n4.toLowerCase().includes(q);
+  };
+
+  const inProgressGames = allMainGames.filter(g => !g.isScored && g.started && matchesFilter(g));
+  const completedGames = allMainGames.filter(g => g.isScored && matchesFilter(g));
+  const availableGames = allMainGames.filter(g => !g.isScored && !g.started && matchesFilter(g));
+
+  const renderMainGameCard = (gameObj) => {
+    const { rIdx, gIdx, isScored, isRecording } = gameObj;
+    const game = gameObj;
+    const team1 = tournament.teams[game.team1Idx];
+    const team2 = tournament.teams[game.team2Idx];
+    const t1Wins = isScored && game.score1 > game.score2;
+    const t2Wins = isScored && game.score2 > game.score1;
+
+    return (
+      <div 
+        key={game.id}
+        style={{
+          padding: "12px 14px",
+          background: "var(--bg-secondary)",
+          borderRadius: "var(--radius-sm)",
+          border: isScored ? "2px solid var(--success-color)" : (game.started ? "2px solid #eab308" : "1px solid var(--border-color)"),
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px"
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-secondary)", textTransform: "uppercase" }}>
+            Round {rIdx + 1} - Match {gIdx + 1}
+          </span>
+          
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {isScored && !isRecording ? (
+              <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: "var(--success-color)", fontWeight: "700" }}>
+                <CheckCircle size={14} /> Scored
+              </span>
+            ) : (!isScored && game.started && (
+              <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: "#eab308", fontWeight: "700" }}>
+                IN PROGRESS {game.pit ? `(Pit #${game.pit})` : ""}
+              </span>
+            ))}
+            {!isAnonymous && (
+              <button 
+                type="button" 
+                className="btn-icon-only danger"
+                onClick={() => handleRemoveGame("MAIN", rIdx, gIdx)}
+                title="Remove Game"
+                style={{ padding: "4px" }}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
+          {assigningTeamSlot?.groupKey === "MAIN" && assigningTeamSlot?.roundIdx === rIdx && assigningTeamSlot?.gameIdx === gIdx && assigningTeamSlot?.slot === "team1Idx" ? (
+            <div style={{ width: "100%", padding: "6px", background: "var(--bg-primary)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)" }}>Select Team:</span>
+                <button type="button" onClick={() => setAssigningTeamSlot(null)} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: "11px" }}>Cancel</button>
+              </div>
+              <div style={{ maxHeight: "150px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
+                {tournament.teams.map((t, tIdx) => (
+                  <button 
+                    key={tIdx}
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: "4px 8px", fontSize: "12px", width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                    onClick={() => handleAssignTeam(t, tIdx)}
+                  >
+                    <span>{t.p1?.name}{t.p2 ? ` & ${t.p2.name}` : ""}</span>
+                    <UserPlus size={12} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div 
+              style={{ 
+                display: "flex", 
+                justifyContent: "space-between", 
+                alignItems: "center",
+                border: t1Wins ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--border-color)",
+                padding: "10px 14px",
+                borderRadius: "var(--radius-sm)",
+                background: t1Wins ? "rgba(16, 185, 129, 0.08)" : "var(--bg-primary)"
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t1Wins ? "700" : "500" }}>
+                  <span style={{ color: t1Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team1?.p1?.name || "Empty Slot"}</span>
+                </div>
+                {team1?.p2 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t1Wins ? "700" : "500" }}>
+                    <span style={{ color: t1Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team1.p2.name}</span>
+                  </div>
+                )}
+                {!isAnonymous && !isScored && (
+                  <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                    <button type="button" onClick={() => setAssigningTeamSlot({ groupKey: "MAIN", roundIdx: rIdx, gameIdx: gIdx, slot: "team1Idx" })} style={{ fontSize: "11px", background: "none", border: "none", color: "var(--accent-color)", cursor: "pointer", padding: 0 }}>Change Team</button>
+                    {team1 && <button type="button" onClick={() => handleRemoveTeam("MAIN", rIdx, gIdx, "team1Idx")} style={{ fontSize: "11px", background: "none", border: "none", color: "var(--danger-color)", cursor: "pointer", padding: 0 }}>Remove</button>}
+                  </div>
+                )}
+              </div>
+              {isScored && !isRecording && (
+                <span style={{ fontSize: "22px", fontWeight: "800", color: t1Wins ? "var(--success-color)" : "var(--text-secondary)" }}>
+                  {game.score1}
+                </span>
+              )}
+            </div>
+          )}
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", margin: "2px 0" }}>
+            <div style={{ flex: 1, borderTop: "1px dashed var(--border-color)", opacity: 0.3 }}></div>
+            <span style={{ padding: "0 10px", fontSize: "11px", color: "var(--text-secondary)", fontWeight: "700", letterSpacing: "1px" }}>VS</span>
+            <div style={{ flex: 1, borderTop: "1px dashed var(--border-color)", opacity: 0.3 }}></div>
+          </div>
+
+          {assigningTeamSlot?.groupKey === "MAIN" && assigningTeamSlot?.roundIdx === rIdx && assigningTeamSlot?.gameIdx === gIdx && assigningTeamSlot?.slot === "team2Idx" ? (
+            <div style={{ width: "100%", padding: "6px", background: "var(--bg-primary)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)" }}>Select Team:</span>
+                <button type="button" onClick={() => setAssigningTeamSlot(null)} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: "11px" }}>Cancel</button>
+              </div>
+              <div style={{ maxHeight: "150px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
+                {tournament.teams.map((t, tIdx) => (
+                  <button 
+                    key={tIdx}
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: "4px 8px", fontSize: "12px", width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                    onClick={() => handleAssignTeam(t, tIdx)}
+                  >
+                    <span>{t.p1?.name}{t.p2 ? ` & ${t.p2.name}` : ""}</span>
+                    <UserPlus size={12} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div 
+              style={{ 
+                display: "flex", 
+                justifyContent: "space-between", 
+                alignItems: "center",
+                border: t2Wins ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--border-color)",
+                padding: "10px 14px",
+                borderRadius: "var(--radius-sm)",
+                background: t2Wins ? "rgba(16, 185, 129, 0.08)" : "var(--bg-primary)"
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t2Wins ? "700" : "500" }}>
+                  <span style={{ color: t2Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team2?.p1?.name || "Empty Slot"}</span>
+                </div>
+                {team2?.p2 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t2Wins ? "700" : "500" }}>
+                    <span style={{ color: t2Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team2.p2.name}</span>
+                  </div>
+                )}
+                {!isAnonymous && !isScored && (
+                  <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                    <button type="button" onClick={() => setAssigningTeamSlot({ groupKey: "MAIN", roundIdx: rIdx, gameIdx: gIdx, slot: "team2Idx" })} style={{ fontSize: "11px", background: "none", border: "none", color: "var(--accent-color)", cursor: "pointer", padding: 0 }}>Change Team</button>
+                    {team2 && <button type="button" onClick={() => handleRemoveTeam("MAIN", rIdx, gIdx, "team2Idx")} style={{ fontSize: "11px", background: "none", border: "none", color: "var(--danger-color)", cursor: "pointer", padding: 0 }}>Remove</button>}
+                  </div>
+                )}
+              </div>
+              {isScored && !isRecording && (
+                <span style={{ fontSize: "22px", fontWeight: "800", color: t2Wins ? "var(--success-color)" : "var(--text-secondary)" }}>
+                  {game.score2}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {!isAnonymous && (isRecording ? (
+          <form onSubmit={(e) => handleSaveScore(e, "MAIN")} style={{ borderTop: "1px solid var(--border-color)", paddingTop: "10px", marginTop: "4px" }}>
+            <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "8px" }}>
+              <div style={{ flex: 1 }}>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  placeholder="Team 1 Score" 
+                  value={scoringGame.score1} 
+                  onChange={(e) => setScoringGame({ ...scoringGame, score1: e.target.value })}
+                  style={{ padding: "6px 10px", fontSize: "13px" }}
+                  min="0"
+                  required
+                />
+              </div>
+              <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>-</span>
+              <div style={{ flex: 1 }}>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  placeholder="Team 2 Score" 
+                  value={scoringGame.score2} 
+                  onChange={(e) => setScoringGame({ ...scoringGame, score2: e.target.value })}
+                  style={{ padding: "6px 10px", fontSize: "13px" }}
+                  min="0"
+                  required
+                />
+              </div>
+            </div>
+
+            {errorMsg && (
+              <div style={{ color: "var(--danger-color)", fontSize: "12px", marginBottom: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
+                <AlertCircle size={12} />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button type="button" className="btn btn-secondary" style={{ padding: "4px 8px", fontSize: "12px" }} onClick={() => setScoringGame(null)}>
+                <X size={12} /> Cancel
+              </button>
+              <button type="submit" className="btn btn-primary" style={{ padding: "4px 10px", fontSize: "12px" }}>
+                <Save size={12} /> Save Score
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "4px" }}>
+            {!isScored && !game.started && !isAnonymous && (
+              <button 
+                type="button" 
+                className="btn btn-primary" 
+                style={{ padding: "5px 12px", fontSize: "12px", backgroundColor: "var(--success-color)", borderColor: "var(--success-color)", color: "#ffffff", marginRight: "8px" }}
+                onClick={() => handleStartGame(game.id, false, "", rIdx, gIdx)}
+              >
+                Start
+              </button>
+            )}
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              style={{ padding: "5px 12px", fontSize: "12px", gap: "6px" }}
+              onClick={() => handleRecordScore(rIdx, gIdx, false)}
+            >
+              <Play size={12} style={{ fill: "currentColor" }} />
+              {isScored ? "Edit Score" : "Record Score"}
+            </button>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div>
+      {startingGamePopup && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.7)", zIndex: 9999, display: "flex", justifyContent: "center", alignItems: "center" }}>
+          <div className="glass-panel" style={{ width: "90%", maxWidth: "400px", textAlign: "center", padding: "30px", background: "var(--bg-primary)" }}>
+            <h2 style={{ color: "var(--success-color)", marginBottom: "16px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+              <Play size={24} style={{ fill: "currentColor" }} /> Game Starting!
+            </h2>
+            <div style={{ fontSize: "18px", fontWeight: "700", marginBottom: "8px" }}>{startingGamePopup.team1}</div>
+            <div style={{ color: "var(--text-secondary)", marginBottom: "8px", fontSize: "12px", fontWeight: "700" }}>VS</div>
+            <div style={{ fontSize: "18px", fontWeight: "700", marginBottom: "24px" }}>{startingGamePopup.team2}</div>
+            <div style={{ padding: "15px", backgroundColor: "var(--bg-secondary)", borderRadius: "8px", border: "2px solid var(--accent-color)", marginBottom: "24px" }}>
+              <span style={{ fontSize: "14px", color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>Please proceed to</span>
+              <span style={{ fontSize: "32px", fontWeight: "800", color: "var(--accent-color)" }}>Pit #{startingGamePopup.pit}</span>
+            </div>
+            <button className="btn btn-primary" style={{ width: "100%", padding: "12px", fontSize: "16px" }} onClick={() => setStartingGamePopup(null)}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Page Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "16px" }}>
         <div>
@@ -1204,10 +1950,101 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
         )}
       </div>
 
-      {!isPlayoffs ? (
+      {isAdjustingPlayoffs ? (
+        /* ================= ADJUST PLAYOFFS VIEW ================= */
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+          <div className="glass-panel" style={{ padding: "20px" }}>
+            <h2 style={{ fontSize: "20px", fontWeight: "700", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <Trophy size={20} style={{ color: "var(--gold-color)" }} />
+              Review Playoff Divisions
+            </h2>
+            <p style={{ color: "var(--text-secondary)", fontSize: "14px", marginBottom: "16px" }}>
+              Teams have been assigned to divisions based on their final standings. You can drag and drop teams between divisions to adjust the sizes or override assignments before finalizing.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button type="button" className="btn btn-primary" onClick={handleFinalizePlayoffs} style={{ gap: "8px" }}>
+                <CheckCircle size={16} /> Finalize and Generate Brackets
+              </button>
+            </div>
+          </div>
+          
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+            {["A", "B", "C", "D"].map(group => (
+              <div 
+                key={group} 
+                className="glass-panel"
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, group)}
+                style={{ display: "flex", flexDirection: "column", gap: "12px", minHeight: "300px" }}
+              >
+                <h3 style={{ fontSize: "16px", fontWeight: "700", textAlign: "center", paddingBottom: "12px", borderBottom: "2px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span>{group} DIVISION</span>
+                  <span style={{ fontSize: "12px", background: "var(--bg-secondary)", padding: "2px 8px", borderRadius: "10px", color: "var(--text-secondary)" }}>
+                    {tournament.playoffAssignments?.[group]?.length || 0} teams
+                  </span>
+                </h3>
+                
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {(tournament.playoffAssignments?.[group] || []).map((tObj) => (
+                    <div 
+                      key={tObj.team.p1.id}
+                      draggable={!isAnonymous}
+                      onDragStart={(e) => handleDragStart(e, tObj, group)}
+                      style={{ 
+                        padding: "10px", 
+                        background: "var(--bg-primary)", 
+                        border: "1px solid var(--border-color)", 
+                        borderRadius: "var(--radius-sm)",
+                        cursor: isAnonymous ? "default" : "grab",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "4px"
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--text-secondary)" }}>Rank #{tObj.rank}</span>
+                        <span style={{ fontSize: "12px", fontWeight: "600", color: "var(--accent-color)" }}>
+                          {tObj.pointsScored}:{tObj.pointsAgainst}
+                        </span>
+                      </div>
+                      <div style={{ fontWeight: "600", fontSize: "14px" }}>
+                        {tObj.team.p1?.name} & {tObj.team.p2?.name}
+                      </div>
+                      <div style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
+                        {tObj.wins}W - {tObj.losses}L
+                      </div>
+                    </div>
+                  ))}
+                  {(!tournament.playoffAssignments?.[group] || tournament.playoffAssignments?.[group].length === 0) && (
+                    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", border: "2px dashed var(--border-color)", borderRadius: "var(--radius-sm)", color: "var(--text-secondary)", fontSize: "12px", padding: "20px", textAlign: "center" }}>
+                      Drag teams here
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : !isPlayoffs ? (
         /* ================= STARTING BRACKETS VIEW ================= */
-        <div className="dashboard-grid">
-          {/* Left Column: Round Brackets */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+          {/* Search Filter */}
+          <div style={{ display: "flex", alignItems: "center", background: "var(--bg-secondary)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)", padding: "0 14px", height: "44px" }}>
+            <Search size={18} style={{ color: "var(--text-secondary)", marginRight: "10px" }} />
+            <input 
+              type="text" 
+              placeholder="Filter matches by player name..." 
+              value={gameFilter}
+              onChange={(e) => setGameFilter(e.target.value)}
+              style={{ background: "transparent", border: "none", color: "var(--text-primary)", flex: 1, outline: "none", fontSize: "15px" }}
+            />
+            {gameFilter && (
+              <X size={16} style={{ cursor: "pointer", color: "var(--text-secondary)" }} onClick={() => setGameFilter("")} />
+            )}
+          </div>
+
+          <div className="dashboard-grid">
+          {/* Left Column: Active & Completed Games */}
           <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
             {showPlayoffButton && (
               <div 
@@ -1228,209 +2065,77 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                   <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0 }}>Starting rounds finished. You can now generate the single elimination playoffs.</p>
                 </div>
                 {!isAnonymous && (
-                  <button type="button" className="btn btn-primary" style={{ gap: "8px" }} onClick={handleGeneratePlayoffs}>
+                  <button type="button" className="btn btn-primary" style={{ gap: "8px" }} onClick={handleReviewPlayoffs}>
                     <Trophy size={16} /> Generate Playoffs Brackets <ArrowRight size={16} />
                   </button>
                 )}
               </div>
             )}
 
-            {tournament.rounds.map((round, rIdx) => (
-              <div key={rIdx} className="glass-panel">
+            {!isAnonymous && (
+              <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginBottom: "8px" }}>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => handleAddRound("MAIN")}
+                  style={{ fontSize: "13px", padding: "6px 12px" }}
+                >
+                  + Add Round
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-danger" 
+                  onClick={() => handleClearSchedule("MAIN")}
+                  style={{ fontSize: "13px", padding: "6px 12px" }}
+                >
+                  <RotateCcw size={14} /> Clear Schedule
+                </button>
+              </div>
+            )}
+
+            {/* In Progress Games */}
+            <div className="glass-panel">
+              <h3 style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "16px", fontWeight: "700", marginBottom: "16px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>
+                <Activity size={18} style={{ color: "#eab308" }} />
+                In Progress Matches
+              </h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {inProgressGames.map(renderMainGameCard)}
+                {inProgressGames.length === 0 && (
+                  <p style={{ fontSize: "13px", color: "var(--text-secondary)", fontStyle: "italic", textAlign: "center", margin: "20px 0" }}>
+                    No games currently in progress.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Completed Games */}
+            <div className="glass-panel">
+              <h3 style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "16px", fontWeight: "700", marginBottom: "16px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>
+                <CheckCircle size={18} style={{ color: "var(--success-color)" }} />
+                Completed Matches
+              </h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {completedGames.map(renderMainGameCard)}
+                {completedGames.length === 0 && (
+                  <p style={{ fontSize: "13px", color: "var(--text-secondary)", fontStyle: "italic", textAlign: "center", margin: "20px 0" }}>
+                    No completed matches yet.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Byes (optional) */}
+            {tournament.byes && tournament.byes.some(b => b) && (
+              <div className="glass-panel">
                 <h3 style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "16px", fontWeight: "700", marginBottom: "16px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>
                   <Calendar size={18} style={{ color: "var(--accent-color)" }} />
-                  Round {rIdx + 1}
+                  Byes
                 </h3>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  {round.map((game, gIdx) => {
-                    const team1 = tournament.teams[game.team1Idx];
-                    const team2 = tournament.teams[game.team2Idx];
-                    const isScored = game.score1 !== null && game.score2 !== null;
-                    const isRecording = scoringGame?.roundIdx === rIdx && scoringGame?.gameIdx === gIdx && !scoringGame.isPlayoffs;
-
-                    const t1Wins = isScored && game.score1 > game.score2;
-                    const t2Wins = isScored && game.score2 > game.score1;
-
-                    return (
-                      <div 
-                        key={game.id}
-                        style={{
-                          padding: "12px 14px",
-                          background: "var(--bg-secondary)",
-                          borderRadius: "var(--radius-sm)",
-                          border: isScored ? "2px solid var(--success-color)" : (game.started ? "2px solid #eab308" : "1px solid var(--border-color)"),
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "10px"
-                        }}
-                      >
-                        {/* Game Card Header/Details */}
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-secondary)", textTransform: "uppercase" }}>
-                            Match {gIdx + 1}
-                          </span>
-                          
-                          {isScored && !isRecording ? (
-                            <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: "var(--success-color)", fontWeight: "700" }}>
-                              <CheckCircle size={14} /> Scored
-                            </span>
-                          ) : (!isScored && game.started && (
-                            <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: "#eab308", fontWeight: "700" }}>
-                              IN PROGRESS
-                            </span>
-                          ))}
-                        </div>
-
-                        {/* Opponents List */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
-                          {/* Team 1 Box */}
-                          <div 
-                            style={{ 
-                              display: "flex", 
-                              justifyContent: "space-between", 
-                              alignItems: "center",
-                              border: t1Wins ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--border-color)",
-                              padding: "10px 14px",
-                              borderRadius: "var(--radius-sm)",
-                              background: t1Wins ? "rgba(16, 185, 129, 0.08)" : "var(--bg-primary)"
-                            }}
-                          >
-                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t1Wins ? "700" : "500" }}>
-                                <span style={{ color: t1Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team1.p1?.name || "Empty Slot"}</span>
-                                {/* Rank Badge Removed */}
-                              </div>
-                              {team1.p2 && (
-                                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t1Wins ? "700" : "500" }}>
-                                  <span style={{ color: t1Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team1.p2.name}</span>
-                                  {/* Rank Badge Removed */}
-                                </div>
-                              )}
-                            </div>
-                            {isScored && !isRecording && (
-                              <span style={{ fontSize: "22px", fontWeight: "800", color: t1Wins ? "var(--success-color)" : "var(--text-secondary)" }}>
-                                {game.score1}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* VS Divider */}
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", margin: "2px 0" }}>
-                            <div style={{ flex: 1, borderTop: "1px dashed var(--border-color)", opacity: 0.3 }}></div>
-                            <span style={{ padding: "0 10px", fontSize: "11px", color: "var(--text-secondary)", fontWeight: "700", letterSpacing: "1px" }}>VS</span>
-                            <div style={{ flex: 1, borderTop: "1px dashed var(--border-color)", opacity: 0.3 }}></div>
-                          </div>
-
-                          {/* Team 2 Box */}
-                          <div 
-                            style={{ 
-                              display: "flex", 
-                              justifyContent: "space-between", 
-                              alignItems: "center",
-                              border: t2Wins ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--border-color)",
-                              padding: "10px 14px",
-                              borderRadius: "var(--radius-sm)",
-                              background: t2Wins ? "rgba(16, 185, 129, 0.08)" : "var(--bg-primary)"
-                            }}
-                          >
-                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t2Wins ? "700" : "500" }}>
-                                <span style={{ color: t2Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team2.p1?.name || "Empty Slot"}</span>
-                                {/* Rank Badge Removed */}
-                              </div>
-                              {team2.p2 && (
-                                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t2Wins ? "700" : "500" }}>
-                                  <span style={{ color: t2Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team2.p2.name}</span>
-                                  {/* Rank Badge Removed */}
-                                </div>
-                              )}
-                            </div>
-                            {isScored && !isRecording && (
-                              <span style={{ fontSize: "22px", fontWeight: "800", color: t2Wins ? "var(--success-color)" : "var(--text-secondary)" }}>
-                                {game.score2}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Scoring Inputs Form overlay */}
-                        {!isAnonymous && (isRecording ? (
-                          <form onSubmit={handleSaveScore} style={{ borderTop: "1px solid var(--border-color)", paddingTop: "10px", marginTop: "4px" }}>
-                            <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "8px" }}>
-                              <div style={{ flex: 1 }}>
-                                <input 
-                                  type="number" 
-                                  className="form-input" 
-                                  placeholder="Team 1 Score" 
-                                  value={scoringGame.score1} 
-                                  onChange={(e) => setScoringGame({ ...scoringGame, score1: e.target.value })}
-                                  style={{ padding: "6px 10px", fontSize: "13px" }}
-                                  min="0"
-                                  required
-                                />
-                              </div>
-                              <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>-</span>
-                              <div style={{ flex: 1 }}>
-                                <input 
-                                  type="number" 
-                                  className="form-input" 
-                                  placeholder="Team 2 Score" 
-                                  value={scoringGame.score2} 
-                                  onChange={(e) => setScoringGame({ ...scoringGame, score2: e.target.value })}
-                                  style={{ padding: "6px 10px", fontSize: "13px" }}
-                                  min="0"
-                                  required
-                                />
-                              </div>
-                            </div>
-
-                            {errorMsg && (
-                              <div style={{ color: "var(--danger-color)", fontSize: "12px", marginBottom: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
-                                <AlertCircle size={12} />
-                                <span>{errorMsg}</span>
-                              </div>
-                            )}
-
-                            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                              <button type="button" className="btn btn-secondary" style={{ padding: "4px 8px", fontSize: "12px" }} onClick={() => setScoringGame(null)}>
-                                <X size={12} /> Cancel
-                              </button>
-                              <button type="submit" className="btn btn-primary" style={{ padding: "4px 10px", fontSize: "12px" }}>
-                                <Save size={12} /> Save Score
-                              </button>
-                            </div>
-                          </form>
-                        ) : (
-                          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "4px" }}>
-                            {!isScored && !game.started && !isAnonymous && (
-                              <button 
-                                type="button" 
-                                className="btn btn-primary" 
-                                style={{ padding: "5px 12px", fontSize: "12px", backgroundColor: "var(--success-color)", borderColor: "var(--success-color)", color: "#ffffff", marginRight: "8px" }}
-                                onClick={() => handleStartGame(game.id, false, "", rIdx, gIdx)}
-                              >
-                                Start
-                              </button>
-                            )}
-                            <button 
-                              type="button" 
-                              className="btn btn-secondary" 
-                              style={{ padding: "5px 12px", fontSize: "12px", gap: "6px" }}
-                              onClick={() => handleRecordScore(rIdx, gIdx, false)}
-                            >
-                              <Play size={12} style={{ fill: "currentColor" }} />
-                              {isScored ? "Edit Score" : "Record Score"}
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
-                  
-                  {/* Round Bye Notice */}
-                  {tournament.byes[rIdx] && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {tournament.byes.map((byeTeam, rIdx) => byeTeam && (
                     <div 
+                      key={rIdx}
                       style={{ 
                         padding: "8px 12px", 
                         background: "rgba(99, 102, 241, 0.06)", 
@@ -1445,18 +2150,82 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                     >
                       <Trophy size={14} style={{ color: "var(--accent-color)" }} />
                       <span>
-                        <strong>Bye Round:</strong> {tournament.byes[rIdx].p1?.name || "Empty"} & {tournament.byes[rIdx].p2?.name || "Empty"} has a bye this round.
+                        <strong>Round {rIdx + 1} Bye:</strong> {byeTeam.p1?.name || "Empty"} & {byeTeam.p2?.name || "Empty"}
                       </span>
                     </div>
-                  )}
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
           </div>
 
-          {/* Right Column: Live Standings */}
-          <div>
+          {/* Right Column: Up Next, Live Standings, Pits Status */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+            
+            {/* Available Games (Up Next) */}
+            <div className="glass-panel">
+              <h3 style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "16px", fontWeight: "700", marginBottom: "16px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>
+                <Clock size={18} style={{ color: "var(--accent-color)" }} />
+                Up Next (Available Games)
+              </h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {availableGames.map(renderMainGameCard)}
+                {availableGames.length === 0 && (
+                  <p style={{ fontSize: "13px", color: "var(--text-secondary)", fontStyle: "italic", textAlign: "center", margin: "20px 0" }}>
+                    No available games. Wait for matches to finish.
+                  </p>
+                )}
+                {!isAnonymous && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      if (tournament.rounds && tournament.rounds.length > 0) {
+                        handleAddGame("MAIN", tournament.rounds.length - 1);
+                      } else {
+                        handleAddRound("MAIN");
+                      }
+                    }}
+                    style={{ marginTop: "12px", width: "100%", fontSize: "12px", borderStyle: "dashed" }}
+                  >
+                    + Add Game to Latest Round
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Pits Status */}
             <div className="glass-panel" style={{ position: "sticky", top: "24px" }}>
+              <h3 style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "16px", fontWeight: "700", marginBottom: "16px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>
+                <CheckCircle size={18} style={{ color: "var(--success-color)" }} />
+                Available Pits
+              </h3>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
+                {[1, 2, 3, 4, 5, 6, 7, 8].map(pitNum => {
+                  const isInUse = pitsInUseSet.has(pitNum);
+                  return (
+                    <div 
+                      key={pitNum}
+                      style={{
+                        padding: "10px 4px",
+                        textAlign: "center",
+                        borderRadius: "var(--radius-sm)",
+                        background: isInUse ? "var(--bg-secondary)" : "rgba(16, 185, 129, 0.1)",
+                        border: isInUse ? "1px solid var(--border-color)" : "1px solid var(--success-color)",
+                        opacity: isInUse ? 0.6 : 1
+                      }}
+                    >
+                      <div style={{ fontSize: "11px", color: isInUse ? "var(--text-secondary)" : "var(--success-color)", fontWeight: "600", marginBottom: "4px" }}>Pit {pitNum}</div>
+                      <div style={{ fontSize: "10px", color: isInUse ? "var(--danger-color)" : "var(--success-color)", fontWeight: "700" }}>
+                        {isInUse ? "IN USE" : "OPEN"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="glass-panel">
               <h3 style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "16px", fontWeight: "700", marginBottom: "16px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>
                 <Trophy size={18} style={{ color: "var(--gold-color)" }} />
                 Live Team Standings
@@ -1509,6 +2278,7 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                 </table>
               </div>
             </div>
+          </div>
           </div>
         </div>
       ) : (
@@ -1662,6 +2432,19 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                     </div>
                   )}
 
+                  {!isAnonymous && (
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
+                      <button 
+                        type="button" 
+                        className="btn btn-danger" 
+                        onClick={() => handleClearSchedule(activePlayoffTab)}
+                        style={{ fontSize: "13px", padding: "6px 12px" }}
+                      >
+                        <RotateCcw size={14} /> Clear Schedule
+                      </button>
+                    </div>
+                  )}
+
                   <div className="dashboard-grid">
                     {/* Left Column: Round matches list */}
                     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
@@ -1700,47 +2483,89 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                                     <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-secondary)", textTransform: "uppercase" }}>
                                       Match {gIdx + 1}
                                     </span>
-                                    {isScored && !isRecording ? (
-                                      <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: "var(--success-color)", fontWeight: "700" }}>
-                                        <CheckCircle size={14} /> Scored
-                                      </span>
-                                    ) : (!isScored && game.started && (
-                                      <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: "#eab308", fontWeight: "700" }}>
-                                        IN PROGRESS
-                                      </span>
-                                    ))}
+                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                      {isScored && !isRecording ? (
+                                        <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: "var(--success-color)", fontWeight: "700" }}>
+                                          <CheckCircle size={14} /> Scored
+                                        </span>
+                                      ) : (!isScored && game.started && (
+                                        <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: "#eab308", fontWeight: "700" }}>
+                                          IN PROGRESS {game.pit ? `(Pit #${game.pit})` : ""}
+                                        </span>
+                                      ))}
+                                      {!isAnonymous && (
+                                        <button 
+                                          type="button" 
+                                          className="btn-icon-only danger"
+                                          onClick={() => handleRemoveGame(activePlayoffTab, rIdx, gIdx)}
+                                          title="Remove Game"
+                                          style={{ padding: "4px" }}
+                                        >
+                                          <X size={14} />
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
 
                                   {/* Opponents Stack */}
                                   <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
                                     {/* Team 1 Box */}
-                                    <div 
-                                      style={{ 
-                                        display: "flex", 
-                                        justifyContent: "space-between", 
-                                        alignItems: "center",
-                                        border: t1Wins ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--border-color)",
-                                        padding: "10px 14px",
-                                        borderRadius: "var(--radius-sm)",
-                                        background: t1Wins ? "rgba(16, 185, 129, 0.08)" : "var(--bg-primary)"
-                                      }}
-                                    >
-                                      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t1Wins ? "700" : "500" }}>
-                                          <span style={{ color: t1Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team1.p1?.name || "Empty Slot"}</span>
+                                    {assigningTeamSlot?.groupKey === activePlayoffTab && assigningTeamSlot?.roundIdx === rIdx && assigningTeamSlot?.gameIdx === gIdx && assigningTeamSlot?.slot === "t1" ? (
+                                      <div style={{ width: "100%", padding: "6px", background: "var(--bg-primary)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                                          <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)" }}>Select Team:</span>
+                                          <button type="button" onClick={() => setAssigningTeamSlot(null)} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: "11px" }}>Cancel</button>
                                         </div>
-                                        {team1.p2 && (
+                                        <div style={{ maxHeight: "150px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
+                                          {tournament.teams.map((t, tIdx) => (
+                                            <button 
+                                              key={tIdx}
+                                              type="button"
+                                              className="btn btn-secondary"
+                                              style={{ padding: "4px 8px", fontSize: "12px", width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                                              onClick={() => handleAssignTeam(t)}
+                                            >
+                                              <span>{t.p1?.name}{t.p2 ? ` & ${t.p2.name}` : ""}</span>
+                                              <UserPlus size={12} />
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div 
+                                        style={{ 
+                                          display: "flex", 
+                                          justifyContent: "space-between", 
+                                          alignItems: "center",
+                                          border: t1Wins ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--border-color)",
+                                          padding: "10px 14px",
+                                          borderRadius: "var(--radius-sm)",
+                                          background: t1Wins ? "rgba(16, 185, 129, 0.08)" : "var(--bg-primary)"
+                                        }}
+                                      >
+                                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                                           <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t1Wins ? "700" : "500" }}>
-                                            <span style={{ color: t1Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team1.p2.name}</span>
+                                            <span style={{ color: t1Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team1?.p1?.name || "Empty Slot"}</span>
                                           </div>
+                                          {team1?.p2 && (
+                                            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t1Wins ? "700" : "500" }}>
+                                              <span style={{ color: t1Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team1.p2.name}</span>
+                                            </div>
+                                          )}
+                                          {!isAnonymous && !isScored && (
+                                            <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                                              <button type="button" onClick={() => setAssigningTeamSlot({ groupKey: activePlayoffTab, roundIdx: rIdx, gameIdx: gIdx, slot: "t1" })} style={{ fontSize: "11px", background: "none", border: "none", color: "var(--accent-color)", cursor: "pointer", padding: 0 }}>Change Team</button>
+                                              {team1 && <button type="button" onClick={() => handleRemoveTeam(activePlayoffTab, rIdx, gIdx, "t1")} style={{ fontSize: "11px", background: "none", border: "none", color: "var(--danger-color)", cursor: "pointer", padding: 0 }}>Remove</button>}
+                                            </div>
+                                          )}
+                                        </div>
+                                        {isScored && !isRecording && (
+                                          <span style={{ fontSize: "22px", fontWeight: "800", color: t1Wins ? "var(--success-color)" : "var(--text-secondary)" }}>
+                                            {game.score1}
+                                          </span>
                                         )}
                                       </div>
-                                      {isScored && !isRecording && (
-                                        <span style={{ fontSize: "22px", fontWeight: "800", color: t1Wins ? "var(--success-color)" : "var(--text-secondary)" }}>
-                                          {game.score1}
-                                        </span>
-                                      )}
-                                    </div>
+                                    )}
 
                                     {/* VS Divider */}
                                     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", margin: "2px 0" }}>
@@ -1750,33 +2575,62 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                                     </div>
 
                                     {/* Team 2 Box */}
-                                    <div 
-                                      style={{ 
-                                        display: "flex", 
-                                        justifyContent: "space-between", 
-                                        alignItems: "center",
-                                        border: t2Wins ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--border-color)",
-                                        padding: "10px 14px",
-                                        borderRadius: "var(--radius-sm)",
-                                        background: t2Wins ? "rgba(16, 185, 129, 0.08)" : "var(--bg-primary)"
-                                      }}
-                                    >
-                                      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t2Wins ? "700" : "500" }}>
-                                          <span style={{ color: t2Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team2.p1?.name || "Empty Slot"}</span>
+                                    {assigningTeamSlot?.groupKey === activePlayoffTab && assigningTeamSlot?.roundIdx === rIdx && assigningTeamSlot?.gameIdx === gIdx && assigningTeamSlot?.slot === "t2" ? (
+                                      <div style={{ width: "100%", padding: "6px", background: "var(--bg-primary)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                                          <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)" }}>Select Team:</span>
+                                          <button type="button" onClick={() => setAssigningTeamSlot(null)} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: "11px" }}>Cancel</button>
                                         </div>
-                                        {team2.p2 && (
+                                        <div style={{ maxHeight: "150px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
+                                          {tournament.teams.map((t, tIdx) => (
+                                            <button 
+                                              key={tIdx}
+                                              type="button"
+                                              className="btn btn-secondary"
+                                              style={{ padding: "4px 8px", fontSize: "12px", width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                                              onClick={() => handleAssignTeam(t)}
+                                            >
+                                              <span>{t.p1?.name}{t.p2 ? ` & ${t.p2.name}` : ""}</span>
+                                              <UserPlus size={12} />
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div 
+                                        style={{ 
+                                          display: "flex", 
+                                          justifyContent: "space-between", 
+                                          alignItems: "center",
+                                          border: t2Wins ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--border-color)",
+                                          padding: "10px 14px",
+                                          borderRadius: "var(--radius-sm)",
+                                          background: t2Wins ? "rgba(16, 185, 129, 0.08)" : "var(--bg-primary)"
+                                        }}
+                                      >
+                                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                                           <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t2Wins ? "700" : "500" }}>
-                                            <span style={{ color: t2Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team2.p2.name}</span>
+                                            <span style={{ color: t2Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team2?.p1?.name || "Empty Slot"}</span>
                                           </div>
+                                          {team2?.p2 && (
+                                            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "15px", fontWeight: t2Wins ? "700" : "500" }}>
+                                              <span style={{ color: t2Wins ? "var(--text-primary)" : "var(--text-secondary)" }}>{team2.p2.name}</span>
+                                            </div>
+                                          )}
+                                          {!isAnonymous && !isScored && (
+                                            <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                                              <button type="button" onClick={() => setAssigningTeamSlot({ groupKey: activePlayoffTab, roundIdx: rIdx, gameIdx: gIdx, slot: "t2" })} style={{ fontSize: "11px", background: "none", border: "none", color: "var(--accent-color)", cursor: "pointer", padding: 0 }}>Change Team</button>
+                                              {team2 && <button type="button" onClick={() => handleRemoveTeam(activePlayoffTab, rIdx, gIdx, "t2")} style={{ fontSize: "11px", background: "none", border: "none", color: "var(--danger-color)", cursor: "pointer", padding: 0 }}>Remove</button>}
+                                            </div>
+                                          )}
+                                        </div>
+                                        {isScored && !isRecording && (
+                                          <span style={{ fontSize: "22px", fontWeight: "800", color: t2Wins ? "var(--success-color)" : "var(--text-secondary)" }}>
+                                            {game.score2}
+                                          </span>
                                         )}
                                       </div>
-                                      {isScored && !isRecording && (
-                                        <span style={{ fontSize: "22px", fontWeight: "800", color: t2Wins ? "var(--success-color)" : "var(--text-secondary)" }}>
-                                          {game.score2}
-                                        </span>
-                                      )}
-                                    </div>
+                                    )}
                                   </div>
 
                                   {/* Scoring inputs */}
@@ -1852,14 +2706,66 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
                                 </div>
                               );
                             })}
+                            {!isAnonymous && (
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => handleAddGame(activePlayoffTab, rIdx)}
+                                style={{ marginTop: "12px", width: "100%", fontSize: "12px", borderStyle: "dashed" }}
+                              >
+                                + Add Game
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))}
+                      {!isAnonymous && (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => handleAddRound(activePlayoffTab)}
+                          style={{ width: "100%", fontSize: "14px", padding: "10px", marginTop: "8px" }}
+                        >
+                          + Add Round
+                        </button>
+                      )}
                     </div>
 
-                    {/* Right Column: Live Standings */}
-                    <div>
+                    {/* Right Column: Live Standings and Pits Status */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                      
+                      {/* Pits Status */}
                       <div className="glass-panel" style={{ position: "sticky", top: "24px" }}>
+                        <h3 style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "16px", fontWeight: "700", marginBottom: "16px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>
+                          <CheckCircle size={18} style={{ color: "var(--success-color)" }} />
+                          Available Pits
+                        </h3>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
+                          {[1, 2, 3, 4, 5, 6, 7, 8].map(pitNum => {
+                            const isInUse = pitsInUseSet.has(pitNum);
+                            return (
+                              <div 
+                                key={pitNum}
+                                style={{
+                                  padding: "10px 4px",
+                                  textAlign: "center",
+                                  borderRadius: "var(--radius-sm)",
+                                  background: isInUse ? "var(--bg-secondary)" : "rgba(16, 185, 129, 0.1)",
+                                  border: isInUse ? "1px solid var(--border-color)" : "1px solid var(--success-color)",
+                                  opacity: isInUse ? 0.6 : 1
+                                }}
+                              >
+                                <div style={{ fontSize: "11px", color: isInUse ? "var(--text-secondary)" : "var(--success-color)", fontWeight: "600", marginBottom: "4px" }}>Pit {pitNum}</div>
+                                <div style={{ fontSize: "10px", color: isInUse ? "var(--danger-color)" : "var(--success-color)", fontWeight: "700" }}>
+                                  {isInUse ? "IN USE" : "OPEN"}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="glass-panel">
                         <h3 style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "16px", fontWeight: "700", marginBottom: "16px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>
                           <Trophy size={18} style={{ color: "var(--gold-color)" }} />
                           Playoff Standings ({activePlayoffTab} DIVISION)
@@ -1919,6 +2825,37 @@ export default function TournamentBrackets({ players, games, tournament, isAnony
 
             return (
               <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                {/* Pits Status for Single-Elimination */}
+                <div className="glass-panel">
+                  <h3 style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "16px", fontWeight: "700", marginBottom: "16px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>
+                    <CheckCircle size={18} style={{ color: "var(--success-color)" }} />
+                    Available Pits
+                  </h3>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: "10px" }}>
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map(pitNum => {
+                      const isInUse = pitsInUseSet.has(pitNum);
+                      return (
+                        <div 
+                          key={pitNum}
+                          style={{
+                            padding: "10px 4px",
+                            textAlign: "center",
+                            borderRadius: "var(--radius-sm)",
+                            background: isInUse ? "var(--bg-secondary)" : "rgba(16, 185, 129, 0.1)",
+                            border: isInUse ? "1px solid var(--border-color)" : "1px solid var(--success-color)",
+                            opacity: isInUse ? 0.6 : 1
+                          }}
+                        >
+                          <div style={{ fontSize: "11px", color: isInUse ? "var(--text-secondary)" : "var(--success-color)", fontWeight: "600", marginBottom: "4px" }}>Pit {pitNum}</div>
+                          <div style={{ fontSize: "10px", color: isInUse ? "var(--danger-color)" : "var(--success-color)", fontWeight: "700" }}>
+                            {isInUse ? "IN USE" : "OPEN"}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {isPlayoffFinished && playoffWinner && (
                   <div 
                     style={{ 

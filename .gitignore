@@ -14,7 +14,6 @@ dist-ssr
 # Local configuration files
 src/services/firebase.config.local.js
 
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -25,3 +24,6 @@ src/services/firebase.config.local.js
 *.njsproj
 *.sln
 *.sw?
+
+.env
+.env.local

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users, UserPlus, UserMinus, Shuffle, RotateCcw, AlertCircle, ArrowLeft, Trophy, DollarSign } from "lucide-react";
+import { Users, UserPlus, UserMinus, Shuffle, RotateCcw, AlertCircle, ArrowLeft, Trophy, DollarSign, Lock, Unlock } from "lucide-react";
 import db from "../services/db";
 
 export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMatch }) {
@@ -22,6 +22,7 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
     return s ? (s.nextTournamentDate || "") : "";
   });
   const [searchQuery, setSearchQuery] = useState("");
+  const [slotSearchQuery, setSlotSearchQuery] = useState("");
 
   // Sync changes from the matchSetup prop down to local states
   useEffect(() => {
@@ -87,11 +88,28 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
     }
   }, [players]);
 
-  // Filter available players
+  // Filter available players for player signup tab
   const availablePlayers = players.filter(
     (p) => !selectedPlayerIds.includes(p.id) && 
     p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
+  // Player IDs currently assigned in generated teams
+  const assignedPlayerIds = new Set();
+  generatedTeams.forEach((t) => {
+    if (t.p1) assignedPlayerIds.add(t.p1.id);
+    if (t.p2) assignedPlayerIds.add(t.p2.id);
+  });
+
+  // Players registered for THIS tournament who are available for team slot assignment
+  const slotAvailablePlayers = players
+    .filter(
+      (p) =>
+        selectedPlayerIds.includes(p.id) &&
+        !assignedPlayerIds.has(p.id) &&
+        p.name.toLowerCase().includes(slotSearchQuery.toLowerCase())
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   // Get selected player objects
   const selectedPlayers = players.filter((p) => selectedPlayerIds.includes(p.id));
@@ -103,6 +121,16 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
       await db.updatePlayer({ id: playerId, isPaid: !currentPaidStatus });
     } catch (err) {
       console.error("Failed to update player paid status:", err);
+    }
+  };
+
+  const handleClearAllPaidFlags = async () => {
+    if (window.confirm("Are you sure you want to clear the 'Paid' ($) status for ALL players?")) {
+      try {
+        await db.clearAllPaidFlags();
+      } catch (err) {
+        console.error("Failed to clear paid status:", err);
+      }
     }
   };
 
@@ -134,6 +162,15 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
     setIsGenerated(false);
   };
 
+  // Toggle team locked status
+  const toggleLockTeam = (teamIdx) => {
+    const updated = [...generatedTeams];
+    if (updated[teamIdx]) {
+      updated[teamIdx] = { ...updated[teamIdx], locked: !updated[teamIdx].locked };
+      setGeneratedTeams(updated);
+    }
+  };
+
   // Matchmaking Algorithm - Branch and Bound Backtracking Solver
   // Solves the Maximum Weight Matching problem to maximize standard pairings (A-D, B-C) 
   // and gender balance (mixed-gender pairs), adhering strictly to rank priority and restrictions.
@@ -142,6 +179,28 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
 
     // Get selected player details
     const activePlayers = players.filter((p) => selectedPlayerIds.includes(p.id));
+
+    // Identify locked teams and their players
+    const lockedTeams = generatedTeams.filter((t) => t.locked && t.p1 && t.p2);
+    const lockedPlayerIds = new Set();
+    lockedTeams.forEach((t) => {
+      if (t.p1) lockedPlayerIds.add(t.p1.id);
+      if (t.p2) lockedPlayerIds.add(t.p2.id);
+    });
+
+    // Unlocked players available for matching
+    const activePlayersToMatch = activePlayers.filter((p) => !lockedPlayerIds.has(p.id));
+
+    if (activePlayersToMatch.length === 0 && lockedTeams.length > 0) {
+      setFallbackMsg("All selected teams are currently locked. Unlock teams to re-generate.");
+      setIsGenerated(true);
+      return;
+    }
+
+    if (activePlayersToMatch.length < 2 || activePlayersToMatch.length % 2 !== 0) {
+      setFallbackMsg("Cannot re-generate: at least 2 unlocked players are required to form pairs.");
+      return;
+    }
 
     // Fisher-Yates Shuffle helper (randomizes player arrays to ensure non-deterministic optimal matching)
     const shuffle = (array) => {
@@ -153,7 +212,7 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
       return arr;
     };
 
-    const randomizedPlayers = shuffle(activePlayers);
+    const randomizedPlayers = shuffle(activePlayersToMatch);
     const len = randomizedPlayers.length;
     const visited = new Array(len).fill(false);
 
@@ -174,13 +233,13 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
         baseScore = 1000; // Primary Rank seeding
       } else if (ranks === "AC") {
         baseScore = 500;  // Fallback seeding
-      } else if (ranks === "BB") {
+      } else if (ranks === "AB" || ranks === "BD" || ranks === "CD") {
+        baseScore = 200;  // Acceptable but suboptimal
+      } else if (ranks === "BB" || ranks === "CC") {
         baseScore = 100;  // Last resort seeding
-      } else if (ranks === "CC") {
-        baseScore = 100;  // Last resort seeding
+      } else {
+        baseScore = 10;   // Extreme last resort (AA, DD)
       }
-
-      if (baseScore < 0) return -999999; // Disallowed pairings (A+A, D+D, B+D, C+D)
 
       // Mixed-gender balancing bonus
       const isMixed = g1 !== g2;
@@ -207,7 +266,7 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
 
     // Fast Greedy matching heuristic to seed the backtracking solver
     const runGreedyMatch = () => {
-      const shuf = shuffle(activePlayers);
+      const shuf = shuffle(activePlayersToMatch);
       const A = shuf.filter((p) => p.rank === "A");
       const B = shuf.filter((p) => p.rank === "B");
       const C = shuf.filter((p) => p.rank === "C");
@@ -246,7 +305,8 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
       while (bMales.length > 0 && bFemales.length > 0) {
         gTeams.push({ p1: bMales.pop(), p2: bFemales.pop() });
       }
-      const bLeftovers = [...bMales, ...bFemales];
+      const bOthers = listB.filter((p) => p.gender !== "Male" && p.gender !== "Female");
+      const bLeftovers = [...bMales, ...bFemales, ...bOthers];
       while (bLeftovers.length >= 2) {
         gTeams.push({ p1: bLeftovers.pop(), p2: bLeftovers.pop() });
       }
@@ -257,9 +317,16 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
       while (cMales.length > 0 && cFemales.length > 0) {
         gTeams.push({ p1: cMales.pop(), p2: cFemales.pop() });
       }
-      const cLeftovers = [...cMales, ...cFemales];
+      const cOthers = listC.filter((p) => p.gender !== "Male" && p.gender !== "Female");
+      const cLeftovers = [...cMales, ...cFemales, ...cOthers];
       while (cLeftovers.length >= 2) {
         gTeams.push({ p1: cLeftovers.pop(), p2: cLeftovers.pop() });
+      }
+
+      // 6. Absolute Last Resort: Pool any remaining players and pair them
+      const remaining = [...listA, ...listD, ...bLeftovers, ...cLeftovers];
+      while (remaining.length >= 2) {
+        gTeams.push({ p1: remaining.pop(), p2: remaining.pop() });
       }
 
       return gTeams;
@@ -352,11 +419,33 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
     });
 
     if (bestScore <= -500000) {
-      setGeneratedTeams([]);
-      setSittingOut(activePlayers);
+      setGeneratedTeams(lockedTeams);
+      setSittingOut(activePlayersToMatch);
     } else {
-      setGeneratedTeams(sortedBestTeams);
+      let nextUnlockedIdx = 0;
+      let newTeams = [];
+
+      if (generatedTeams.length > 0) {
+        newTeams = generatedTeams.map((team) => {
+          if (team.locked && team.p1 && team.p2) {
+            return team; // Keep locked team intact
+          }
+          if (nextUnlockedIdx < sortedBestTeams.length) {
+            return sortedBestTeams[nextUnlockedIdx++];
+          }
+          return team;
+        });
+
+        while (nextUnlockedIdx < sortedBestTeams.length) {
+          newTeams.push(sortedBestTeams[nextUnlockedIdx++]);
+        }
+      } else {
+        newTeams = sortedBestTeams;
+      }
+
+      setGeneratedTeams(newTeams);
       setSittingOut([]);
+      setFallbackMsg("");
     }
 
     setIsGenerated(true);
@@ -370,14 +459,14 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
     const playerToRemove = team[slot];
     if (!playerToRemove) return;
 
-    // Remove from active match players list
-    setSelectedPlayerIds(selectedPlayerIds.filter((id) => id !== playerToRemove.id));
-
-    // Update teams state
+    // Update teams state and unlock if modified.
+    // Note: player remains in selectedPlayerIds so they stay registered for the tourney.
     const updatedTeams = [...generatedTeams];
     updatedTeams[teamIdx][slot] = null;
+    updatedTeams[teamIdx].locked = false;
     setGeneratedTeams(updatedTeams);
     setAssigningSlot(null);
+    setSlotSearchQuery("");
   };
 
   // Assign player to an empty team slot
@@ -385,8 +474,9 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
     if (!assigningSlot) return;
     const { teamIdx, slot } = assigningSlot;
 
-    // Add to active match players list
-    setSelectedPlayerIds([...selectedPlayerIds, player.id]);
+    if (!selectedPlayerIds.includes(player.id)) {
+      setSelectedPlayerIds([...selectedPlayerIds, player.id]);
+    }
 
     // Update teams state
     const updatedTeams = [...generatedTeams];
@@ -399,12 +489,13 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
       const w1 = rankWeight[team.p1.rank] || 0;
       const w2 = rankWeight[team.p2.rank] || 0;
       if (w1 < w2) {
-        updatedTeams[teamIdx] = { p1: team.p2, p2: team.p1 };
+        updatedTeams[teamIdx] = { ...team, p1: team.p2, p2: team.p1 };
       }
     }
 
     setGeneratedTeams(updatedTeams);
     setAssigningSlot(null);
+    setSlotSearchQuery("");
   };
 
   // Generate a 3-round tournament schedule and build starting brackets
@@ -423,7 +514,8 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
     
     // We will generate the round-robin schedule for indices 0 to count-1
     const numRounds = count - 1;
-    const maxRoundsToGen = Math.min(3, numRounds);
+    // For dynamic Swiss, we only generate the first round upfront
+    const maxRoundsToGen = Math.min(1, numRounds);
     
     const roundsList = [];
     const byesList = [];
@@ -694,11 +786,24 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
               <h3 style={{ fontSize: "18px", fontWeight: "600" }}>
                 Active Players In-Match ({selectedPlayers.length})
               </h3>
-              {selectedPlayers.length > 0 && !isAnonymous && (
-                <button type="button" className="btn btn-danger" style={{ padding: "6px 12px", fontSize: "13px" }} onClick={handleClearAll}>
-                  Remove All
-                </button>
-              )}
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                {players.some((p) => p.isPaid) && !isAnonymous && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: "6px 12px", fontSize: "13px", display: "flex", alignItems: "center", gap: "6px" }}
+                    onClick={handleClearAllPaidFlags}
+                    title="Clear paid ($) flag for all players"
+                  >
+                    <DollarSign size={14} style={{ color: "var(--gold-color)" }} /> Clear All Paid
+                  </button>
+                )}
+                {selectedPlayers.length > 0 && !isAnonymous && (
+                  <button type="button" className="btn btn-danger" style={{ padding: "6px 12px", fontSize: "13px" }} onClick={handleClearAll}>
+                    Remove All
+                  </button>
+                )}
+              </div>
             </div>
 
             {selectedPlayers.length === 0 ? (
@@ -809,9 +914,9 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                       display: "flex",
                       gap: "8px",
                       alignItems: "flex-start",
-                      color: "var(--danger-color)",
-                      backgroundColor: "rgba(239, 68, 68, 0.1)",
-                      border: "1px solid rgba(239, 68, 68, 0.3)",
+                      color: "#d97706", // amber color for warning
+                      backgroundColor: "rgba(245, 158, 11, 0.1)",
+                      border: "1px solid rgba(245, 158, 11, 0.3)",
                       padding: "10px",
                       borderRadius: "var(--radius-sm)",
                       fontSize: "13px",
@@ -819,7 +924,7 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                     }}>
                       <AlertCircle size={16} style={{ flexShrink: 0, marginTop: "2px" }} />
                       <span>
-                        <strong>Payment Required:</strong> All active players must be marked as Paid ($) before generating teams. Unpaid: {unpaidActivePlayers.map(p => p.name).join(", ")}.
+                        <strong>Payment Warning:</strong> Not all active players are marked as Paid ($). Unpaid: {unpaidActivePlayers.map(p => p.name).join(", ")}.
                       </span>
                     </div>
                   )}
@@ -836,7 +941,7 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                       className="btn btn-primary"
                       style={{ width: "100%", gap: "10px" }}
                       onClick={handleGenerateTeams}
-                      disabled={selectedPlayers.length < 2 || selectedPlayers.length % 2 !== 0 || !areAllActivePlayersPaid}
+                      disabled={selectedPlayers.length < 2 || selectedPlayers.length % 2 !== 0}
                     >
                       <Shuffle size={18} /> Generate Teams
                     </button>
@@ -969,36 +1074,90 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                     return ranks === "AC" || ranks === "BB" || ranks === "CC";
                   })();
 
+                  const isLocked = !!team.locked;
+
                   return (
                     <div 
                       key={idx} 
                       className="glass-panel" 
                       style={{ 
                         padding: "16px", 
-                        background: isWeird ? "rgba(234, 179, 8, 0.02)" : "var(--bg-secondary)", 
-                        border: isWeird ? "1px solid rgba(234, 179, 8, 0.3)" : "1px solid var(--border-color)",
-                        boxShadow: isWeird ? "0 0 12px rgba(234, 179, 8, 0.05)" : "var(--shadow-sm)",
+                        background: isLocked 
+                          ? "rgba(99, 102, 241, 0.04)" 
+                          : (isWeird ? "rgba(234, 179, 8, 0.02)" : "var(--bg-secondary)"), 
+                        border: isLocked 
+                          ? "1px solid var(--accent-color)" 
+                          : (isWeird ? "1px solid rgba(234, 179, 8, 0.3)" : "1px solid var(--border-color)"),
+                        boxShadow: isLocked 
+                          ? "0 0 14px rgba(99, 102, 241, 0.2)" 
+                          : (isWeird ? "0 0 12px rgba(234, 179, 8, 0.05)" : "var(--shadow-sm)"),
                         transition: "all var(--transition-fast)"
                       }}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                        <h4 style={{ fontSize: "14px", fontWeight: "700", color: isWeird ? "var(--gold-color)" : "var(--accent-color)", textTransform: "uppercase", letterSpacing: "1px", margin: 0 }}>
-                          Team {idx + 1}
-                        </h4>
-                        {isWeird && (
-                          <span 
-                            style={{ 
-                              fontSize: "10px", 
-                              backgroundColor: "rgba(234, 179, 8, 0.15)", 
-                              color: "var(--gold-color)", 
-                              padding: "2px 6px", 
-                              borderRadius: "var(--radius-sm)", 
-                              fontWeight: "600" 
-                            }}
-                          >
-                            Fallback Pair
-                          </span>
-                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <h4 style={{ fontSize: "14px", fontWeight: "700", color: isLocked ? "var(--accent-color)" : (isWeird ? "var(--gold-color)" : "var(--accent-color)"), textTransform: "uppercase", letterSpacing: "1px", margin: 0 }}>
+                            Team {idx + 1}
+                          </h4>
+                          {isLocked && (
+                            <span 
+                              style={{ 
+                                display: "inline-flex", 
+                                alignItems: "center", 
+                                gap: "3px",
+                                fontSize: "10px", 
+                                backgroundColor: "rgba(99, 102, 241, 0.15)", 
+                                color: "var(--accent-color)", 
+                                padding: "2px 6px", 
+                                borderRadius: "var(--radius-sm)", 
+                                fontWeight: "600" 
+                              }}
+                            >
+                              <Lock size={10} /> Locked
+                            </span>
+                          )}
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          {isWeird && (
+                            <span 
+                              style={{ 
+                                fontSize: "10px", 
+                                backgroundColor: "rgba(234, 179, 8, 0.15)", 
+                                color: "var(--gold-color)", 
+                                padding: "2px 6px", 
+                                borderRadius: "var(--radius-sm)", 
+                                fontWeight: "600" 
+                              }}
+                            >
+                              Fallback Pair
+                            </span>
+                          )}
+                          {!isAnonymous && team.p1 && team.p2 && (
+                            <button
+                              type="button"
+                              className="btn"
+                              style={{
+                                padding: "3px 8px",
+                                fontSize: "12px",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                borderRadius: "var(--radius-sm)",
+                                border: isLocked ? "1px solid var(--accent-color)" : "1px solid var(--border-color)",
+                                background: isLocked ? "var(--accent-color)" : "var(--bg-tertiary)",
+                                color: isLocked ? "#ffffff" : "var(--text-primary)",
+                                cursor: "pointer",
+                                transition: "all var(--transition-fast)"
+                              }}
+                              onClick={() => toggleLockTeam(idx)}
+                              title={isLocked ? "Unlock team (allow regeneration)" : "Lock team (keep pair when regenerating)"}
+                            >
+                              {isLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                              <span>{isLocked ? "Locked" : "Lock"}</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                       
                       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -1034,26 +1193,45 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                         ) : (
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: "28px" }}>
                             {assigningSlot?.teamIdx === idx && assigningSlot?.slot === "p1" ? (
-                              <div style={{ width: "100%", padding: "6px", background: "var(--bg-primary)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>
+                              <div style={{ width: "100%", padding: "8px", background: "var(--bg-primary)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-color)", boxShadow: "var(--shadow-sm)" }}>
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                                  <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)" }}>Select:</span>
-                                  <button type="button" onClick={() => setAssigningSlot(null)} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: "11px" }}>Cancel</button>
+                                  <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)" }}>Select Registered Player:</span>
+                                  <button type="button" onClick={() => { setAssigningSlot(null); setSlotSearchQuery(""); }} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: "11px" }}>Cancel</button>
                                 </div>
-                                <div style={{ maxHeight: "100px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
-                                  {availablePlayers.map(p => (
+                                <input
+                                  type="text"
+                                  placeholder="Type player name..."
+                                  value={slotSearchQuery}
+                                  onChange={(e) => setSlotSearchQuery(e.target.value)}
+                                  autoFocus
+                                  style={{
+                                    width: "100%",
+                                    padding: "6px 8px",
+                                    fontSize: "12px",
+                                    borderRadius: "var(--radius-sm)",
+                                    border: "1px solid var(--border-color)",
+                                    background: "var(--bg-secondary)",
+                                    color: "var(--text-primary)",
+                                    marginBottom: "6px"
+                                  }}
+                                />
+                                <div style={{ maxHeight: "120px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  {slotAvailablePlayers.map(p => (
                                     <button 
                                       key={p.id}
                                       type="button"
                                       className="btn btn-secondary"
-                                      style={{ padding: "3px 6px", fontSize: "11px", width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                                      style={{ padding: "4px 8px", fontSize: "11px", width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}
                                       onClick={() => handleAssignPlayerToTeam(p)}
                                     >
-                                      <span>{p.name} ({p.rank})</span>
-                                      <UserPlus size={11} />
+                                      <span>{p.name}</span>
+                                      <span className={`rank-badge rank-${p.rank.toLowerCase()}`} style={{ fontSize: "10px", padding: "1px 4px" }}>{p.rank}</span>
                                     </button>
                                   ))}
-                                  {availablePlayers.length === 0 && (
-                                    <span style={{ fontSize: "10px", color: "var(--text-secondary)" }}>No available players</span>
+                                  {slotAvailablePlayers.length === 0 && (
+                                    <span style={{ fontSize: "11px", color: "var(--text-secondary)", fontStyle: "italic", padding: "4px 0" }}>
+                                      {slotSearchQuery ? "No matching registered players" : "No unassigned registered players"}
+                                    </span>
                                   )}
                                 </div>
                               </div>
@@ -1064,7 +1242,7 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                                     type="button" 
                                     className="btn-icon-only" 
                                     style={{ padding: "4px", color: "var(--accent-color)" }}
-                                    onClick={() => setAssigningSlot({ teamIdx: idx, slot: "p1" })}
+                                    onClick={() => { setAssigningSlot({ teamIdx: idx, slot: "p1" }); setSlotSearchQuery(""); }}
                                     title="Add player"
                                   >
                                     <UserPlus size={14} />
@@ -1115,26 +1293,45 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                         ) : (
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: "28px" }}>
                             {assigningSlot?.teamIdx === idx && assigningSlot?.slot === "p2" ? (
-                              <div style={{ width: "100%", padding: "6px", background: "var(--bg-primary)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>
+                              <div style={{ width: "100%", padding: "8px", background: "var(--bg-primary)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-color)", boxShadow: "var(--shadow-sm)" }}>
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                                  <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)" }}>Select:</span>
-                                  <button type="button" onClick={() => setAssigningSlot(null)} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: "11px" }}>Cancel</button>
+                                  <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)" }}>Select Registered Player:</span>
+                                  <button type="button" onClick={() => { setAssigningSlot(null); setSlotSearchQuery(""); }} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: "11px" }}>Cancel</button>
                                 </div>
-                                <div style={{ maxHeight: "100px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
-                                  {availablePlayers.map(p => (
+                                <input
+                                  type="text"
+                                  placeholder="Type player name..."
+                                  value={slotSearchQuery}
+                                  onChange={(e) => setSlotSearchQuery(e.target.value)}
+                                  autoFocus
+                                  style={{
+                                    width: "100%",
+                                    padding: "6px 8px",
+                                    fontSize: "12px",
+                                    borderRadius: "var(--radius-sm)",
+                                    border: "1px solid var(--border-color)",
+                                    background: "var(--bg-secondary)",
+                                    color: "var(--text-primary)",
+                                    marginBottom: "6px"
+                                  }}
+                                />
+                                <div style={{ maxHeight: "120px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  {slotAvailablePlayers.map(p => (
                                     <button 
                                       key={p.id}
                                       type="button"
                                       className="btn btn-secondary"
-                                      style={{ padding: "3px 6px", fontSize: "11px", width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                                      style={{ padding: "4px 8px", fontSize: "11px", width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}
                                       onClick={() => handleAssignPlayerToTeam(p)}
                                     >
-                                      <span>{p.name} ({p.rank})</span>
-                                      <UserPlus size={11} />
+                                      <span>{p.name}</span>
+                                      <span className={`rank-badge rank-${p.rank.toLowerCase()}`} style={{ fontSize: "10px", padding: "1px 4px" }}>{p.rank}</span>
                                     </button>
                                   ))}
-                                  {availablePlayers.length === 0 && (
-                                    <span style={{ fontSize: "10px", color: "var(--text-secondary)" }}>No available players</span>
+                                  {slotAvailablePlayers.length === 0 && (
+                                    <span style={{ fontSize: "11px", color: "var(--text-secondary)", fontStyle: "italic", padding: "4px 0" }}>
+                                      {slotSearchQuery ? "No matching registered players" : "No unassigned registered players"}
+                                    </span>
                                   )}
                                 </div>
                               </div>
@@ -1145,7 +1342,7 @@ export default function MatchSetup({ players, matchSetup, isAnonymous, onBuildMa
                                     type="button" 
                                     className="btn-icon-only" 
                                     style={{ padding: "4px", color: "var(--accent-color)" }}
-                                    onClick={() => setAssigningSlot({ teamIdx: idx, slot: "p2" })}
+                                    onClick={() => { setAssigningSlot({ teamIdx: idx, slot: "p2" }); setSlotSearchQuery(""); }}
                                     title="Add player"
                                   >
                                     <UserPlus size={14} />

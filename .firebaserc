@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "tourny-planner"
+    "default": "tourny-planner",
+    "dev": "tourney-planner-dev"
   }
 }
